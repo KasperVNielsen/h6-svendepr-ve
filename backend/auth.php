@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 break;
 
             case 'login':
-                $message = loginUser();
+                $message = login();
                 break;
 
             case 'logout':
