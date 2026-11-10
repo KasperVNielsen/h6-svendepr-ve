@@ -5,7 +5,25 @@ $message = "";
 $toastClass = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $message = createUser();
+
+     if (isset($_POST['action'])) {
+
+        switch ($_POST['action']) {
+
+            case 'register':
+                $message = createUser();
+                break;
+
+            case 'login':
+                $message = loginUser();
+                break;
+
+            case 'logout':
+                logOut();
+                break;
+
+        }
+    }
 }
 
 function createUser() {
