@@ -1,6 +1,10 @@
 <?php
 $pageTitle = $pageTitle ?? 'Bil kassen';
 $basePath = $basePath ?? '';
+
+require_once dirname(__DIR__, 2) . '/backend/auth.php';
+
+$userIsLoggedIn = isLoggedIn();
 ?>
 <!DOCTYPE html>
 <html lang="da">
@@ -18,6 +22,8 @@ $basePath = $basePath ?? '';
             --color-page: #f8fafc;
             --color-surface: #ffffff;
             --color-content: #1e293b;
+            --color-danger: #dc2626;
+            --color-success: #15803d;
         }
     </style>
 </head>
@@ -30,9 +36,19 @@ $basePath = $basePath ?? '';
                      alt="Bil kassen">
             </a>
 
-            <a class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
-               href="<?= $basePath ?>frontend/login.php">
-                Login
-            </a>
+            <?php if ($userIsLoggedIn): ?>
+                <form method="post" action="<?= $basePath ?>frontend/login.php">
+                    <input type="hidden" name="action" value="logout">
+                    <button class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
+                            type="submit">
+                        Log ud
+                    </button>
+                </form>
+            <?php else: ?>
+                <a class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
+                   href="<?= $basePath ?>frontend/login.php">
+                    Log ind
+                </a>
+            <?php endif; ?>
         </nav>
     </header>
