@@ -431,24 +431,8 @@ CREATE TABLE `audit_log` (
     CONSTRAINT `fk_audit_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_danish_ci;
 
--- --------------------------------------------------------
--- 20. PASSWORD RESETS
--- --------------------------------------------------------
-DROP TABLE IF EXISTS `password_resets`;
-CREATE TABLE `password_resets` (
-    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `user_id` INT UNSIGNED NOT NULL,
-    `token` VARCHAR(255) NOT NULL,
-    `expires_at` DATETIME NOT NULL,
-    `used_at` DATETIME DEFAULT NULL,
-    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_reset_token` (`token`),
-    KEY `idx_reset_user` (`user_id`),
-    KEY `idx_reset_expires` (`expires_at`),
-    CONSTRAINT `fk_reset_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_danish_ci;
 
+DROP TABLE IF EXISTS `password_resets`;
 -- --------------------------------------------------------
 -- INDSTILLINGER / KONFIGURATION
 -- --------------------------------------------------------
