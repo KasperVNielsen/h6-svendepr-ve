@@ -3,6 +3,39 @@
 require_once 'db.php';
 
 
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+
+    if (isset($_POST['action'])) {
+
+        if (!isset($_SESSION['user_id'])) {
+            die("You must be logged in.");
+        }
+
+        $id = (int) $_SESSION['user_id'];
+
+        switch ($_POST['action']) {
+
+            case 'update_profile':
+                $message = updateProfile($id, $_POST);
+                break;
+
+            case 'change_password':
+                $message = changePassword(
+                    $id,
+                    $_POST['current_password'],
+                    $_POST['new_password']
+                );
+                break;
+        }
+
+        $_SESSION['message'] = $message ?? null;
+
+        header("Location: profile.php");
+        exit;
+    }
+}
+
+
 function getUser(int $id)
 {
     global $pdo;
@@ -13,7 +46,7 @@ function getUser(int $id)
         FROM users
         WHERE id = ?
     ");
-    
+
     $stmt->execute([$id]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     return $user ?: null;
