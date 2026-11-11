@@ -1,6 +1,26 @@
 <?php
 $pageTitle = 'Login | Bil kassen';
 $basePath = '../';
+$loginMessage = '';
+
+require_once __DIR__ . '/../backend/auth.php';
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $action = $_POST['action'] ?? '';
+
+    if ($action === 'logout') {
+        logOut();
+    }
+
+    if ($action === 'login') {
+        $loginMessage = login();
+    }
+}
+
+if (isLoggedIn()) {
+    header('Location: ../index.php');
+    exit;
+}
 
 require __DIR__ . '/templates/header.php';
 ?>
@@ -10,7 +30,15 @@ require __DIR__ . '/templates/header.php';
         <h1 class="text-3xl font-bold text-content">Login</h1>
         <p class="mt-2 text-content/70">Log ind for at fortsætte til din bruger.</p>
 
+        <?php if ($loginMessage !== ''): ?>
+            <p class="mt-5 rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger">
+                <?= htmlspecialchars($loginMessage) ?>
+            </p>
+        <?php endif; ?>
+
         <form class="mt-8 space-y-5" method="post">
+            <input type="hidden" name="action" value="login">
+
             <div>
                 <label class="mb-2 block font-medium text-content" for="email">E-mail</label>
                 <input class="w-full rounded-lg border border-primary/20 px-4 py-3 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
@@ -18,6 +46,7 @@ require __DIR__ . '/templates/header.php';
                        id="email"
                        name="email"
                        autocomplete="email"
+                       value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
                        placeholder="navn@eksempel.dk"
                        required>
             </div>
