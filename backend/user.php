@@ -62,20 +62,61 @@ function updateProfile(int $id, array $data)
 
     foreach ($allowed as $field) {
         if (array_key_exists($field, $data)) {
+            $value = trim($data[$field]);
+
+            // Check required fields
+            if (in_array($field, ['first_name', 'last_name', 'city']) && empty($value)) {
+                return [
+                    'success' => false,
+                    'message' => ucfirst($field) . ' skal udfyldes.'
+                ];
+            }
+
+            // Check maximum length
+            if (strlen($value) > 100) {
+                return [
+                    'success' => false,
+                    'message' => 'Et eller flere felter er for lange.'
+                ];
+            }
+
+            // Validate IBAN if provided
+            if ($field === 'iban' && !empty($value)) {
+                $iban = strtoupper(str_replace(' ', '', $value));
+
+                if (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/', $iban)) {
+                    return [
+                        'success' => false,
+                        'message' => 'Ugyldigt IBAN.'
+                    ];
+                }
+
+                $value = $iban;
+            }
+
             $fields[] = "$field = ?";
-            $values[] = $data[$field];
+            $values[] = $value;
         }
     }
 
-   if (empty($fields)) {
-    return ['success' => false, 'message' => 'Ingen gyldige felter at opdatere.'];
+    if (empty($fields)) {
+        return ['success' => false, 'message' => 'Ingen gyldige felter at opdatere.'];
     }
 
-    $values[] = $id; 
+    $values[] = $id;
+
     $sql = "UPDATE users SET " . implode(', ', $fields) . " WHERE id = ?";
+
     $stmt = $pdo->prepare($sql);
-    return $stmt->execute($values);
+
+    $stmt->execute($values);
+
+    return [
+        'success' => true,
+        'message' => 'Profil opdateret!'
+    ];
 }
+
 
 function changePassword(int $id, string $currentPassword, string $newPassword)
 {
@@ -88,13 +129,16 @@ function changePassword(int $id, string $currentPassword, string $newPassword)
     if (!$user) {
         return ['success' => false, 'message' => 'Bruger ikke fundet.'];
     }
-
-
-   if (password_verify($newPassword, $user['password_hash'])) {
-    return ['success' => false, 'message' => 'Nyt password må ikke være det samme som det gamle.'];
+    
+    // Verify current password
+    if (!password_verify($currentPassword, $user['password_hash'])) {
+        return ['success' => false, 'message' => 'Nuværende password er forkert.'];
     }
 
-  
+    if (password_verify($newPassword, $user['password_hash'])) {
+        return ['success' => false, 'message' => 'Nyt password må ikke være det samme som det gamle.'];
+    }
+
     if (strlen($newPassword) < 8) {
         return ['success' => false, 'message' => 'Nyt password skal være mindst 8 tegn.'];
     }
