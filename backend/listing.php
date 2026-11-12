@@ -12,7 +12,9 @@ function getListings($limit = 30){
         ORDER BY cl.created_at DESC
         LIMIT:limit
     ");
-
+    $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 
