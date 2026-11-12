@@ -37,13 +37,20 @@ $userIsLoggedIn = isLoggedIn();
             </a>
 
             <?php if ($userIsLoggedIn): ?>
-                <form method="post" action="<?= $basePath ?>frontend/login.php">
-                    <input type="hidden" name="action" value="logout">
-                    <button class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
-                            type="submit">
-                        Log ud
-                    </button>
-                </form>
+                <div class="flex items-center gap-3">
+                    <a class="font-semibold text-white/80 transition hover:text-white"
+                       href="<?= $basePath ?>frontend/profile.php">
+                        Min profil
+                    </a>
+
+                    <form method="post" action="<?= $basePath ?>frontend/login.php">
+                        <input type="hidden" name="action" value="logout">
+                        <button class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
+                                type="submit">
+                            Log ud
+                        </button>
+                    </form>
+                </div>
             <?php else: ?>
                 <a class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
                    href="<?= $basePath ?>frontend/login.php">
