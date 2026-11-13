@@ -26,6 +26,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $_POST['new_password']
                 );
                 break;
+            case 'update_profile_image':
+                if (!isset($_FILES['profile_image'])) {
+                    $message = ['success' => false, 'message' => 'Ingen fil modtaget.'];
+                    break;
+                }
+                $message = updateProfileImage($id, $_FILES['profile_image']);
+                break;
         }
 
         $_SESSION['message'] = $message ?? null;
@@ -233,4 +240,79 @@ function changePassword(int $id, string $currentPassword, string $newPassword)
     $stmt->execute([$newHash, $id]);
 
     return ['success' => true, 'message' => 'Password ændret.'];
+}
+
+
+function updateProfileImage(int $id, array $file)   
+{
+    global $pdo;
+
+    //Check if a file was actually uploaded
+    if (!isset($file['tmp_name']) || $file['error'] === UPLOAD_ERR_NO_FILE) {
+        return ['success' => false, 'message' => 'Vælg et billede først.'];
+    }
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'Upload fejlede. Prøv igen.'];
+    }
+
+    //Check file type via MIME (not the extension - it can be spoofed)
+    $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($file['tmp_name']);
+
+    if (!in_array($mime, $allowed)) {
+        return ['success' => false, 'message' => 'Kun JPG, PNG, WEBP eller GIF er tilladt.'];
+    }
+
+    //Check size (max 5 MB)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        return ['success' => false, 'message' => 'Billedet må max være 5 MB.'];
+    }
+
+    //Safe file extension based on MIME
+    $ext = match ($mime) {
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'image/gif'  => 'gif',
+    };
+
+    //Clean the original filename (strip everything except letters/numbers)
+    $original = pathinfo($file['name'], PATHINFO_FILENAME);
+    $original = preg_replace('/[^A-Za-z0-9\-_]/', '-', $original);
+
+    $uploadDir = __DIR__ . '/../frontend/profile-images/';
+
+    //Create the folder if it doesn't exist
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+
+    //Filename: {id}_{name} automatically overwrites the same name
+    $filename = $id . '_' . $original . '.' . $ext;
+    $targetPath = $uploadDir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+        return ['success' => false, 'message' => 'Kunne ikke gemme billedet.'];
+    }
+
+    // 7. Fetch the old image path and delete the file from disk
+    $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
+    $stmt->execute([$id]);
+    $old = $stmt->fetchColumn();
+
+    if ($old) {
+        $oldPath = __DIR__ . '/../frontend/' . $old;
+        if (file_exists($oldPath)) {
+            unlink($oldPath);
+        }
+    }
+
+    // 8. Only store the relative path in the database
+    $dbPath = 'profile-images/' . $filename;
+    $stmt = $pdo->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
+    $stmt->execute([$dbPath, $id]);
+
+    return ['success' => true, 'message' => 'Profilbillede opdateret!'];
 }
