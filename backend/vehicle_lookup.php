@@ -15,7 +15,7 @@ if (PHP_SAPI !== 'cli') {
     exit("This test must be run from the command line.\n");
 }
 
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/db.php';
 
 $expansions = [
     'engine',
