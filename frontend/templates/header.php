@@ -39,6 +39,10 @@ $userIsLoggedIn = isLoggedIn();
             <?php if ($userIsLoggedIn): ?>
                 <div class="flex items-center gap-3">
                     <a class="font-semibold text-white/80 transition hover:text-white"
+                       href="<?= $basePath ?>frontend/create-listing.php">
+                        Sælg bil
+                    </a>
+                    <a class="font-semibold text-white/80 transition hover:text-white"
                        href="<?= $basePath ?>frontend/profile.php">
                         Min profil
                     </a>

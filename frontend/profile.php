@@ -19,7 +19,7 @@ if ($user === null) {
 }
 
 $profileImageName = !empty($user['profile_image']) ? basename($user['profile_image']) : '';
-$profileImageFilePath = __DIR__ . '/images/profile-images/' . $profileImageName;
+$profileImageFilePath = __DIR__ . '/profile-images/' . $profileImageName;
 $hasProfileImage = $profileImageName !== '' && is_file($profileImageFilePath);
 $memberSince = !empty($user['created_at']) ? date('d.m.Y', strtotime($user['created_at'])) : 'Ikke angivet';
 $phone = $user['phone'] ?? '';
@@ -27,10 +27,20 @@ $formattedPhone = preg_match('/^[0-9]{8}$/', $phone)
     ? implode(' ', str_split($phone, 2))
     : ($phone !== '' ? $phone : 'Ikke angivet');
 
+$statement = $pdo->prepare("\n    SELECT cl.id, cl.title, cl.price, cl.status, cl.is_active, cl.main_image,\n           b.name AS brand_name, m.name AS model_name\n    FROM car_listings cl\n    JOIN brands b ON cl.brand_id = b.id\n    JOIN models m ON cl.model_id = m.id\n    WHERE cl.seller_user_id = ?\n    ORDER BY cl.created_at DESC\n");
+$statement->execute([(int) $_SESSION['user_id']]);
+$userListings = $statement->fetchAll(PDO::FETCH_ASSOC);
+
 require __DIR__ . '/templates/header.php';
 ?>
 
 <main class="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+    <?php if (isset($_GET['deleted'])): ?>
+        <div class="mb-7 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-success">
+            <p class="font-semibold">Bilannoncen er slettet.</p>
+        </div>
+    <?php endif; ?>
+
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-sm font-semibold uppercase tracking-wider text-accent">Min konto</p>
@@ -48,7 +58,7 @@ require __DIR__ . '/templates/header.php';
             <div class="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
                 <?php if ($hasProfileImage): ?>
                     <img class="h-24 w-24 shrink-0 rounded-full border-4 border-white/20 object-cover"
-                         src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
+                         src="<?= $basePath ?>frontend/profile-images/<?= rawurlencode($profileImageName) ?>"
                          alt="Profilbillede for <?= htmlspecialchars($user['first_name']) ?>">
                 <?php else: ?>
                     <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-4 border-white/20 bg-white/10 text-white">
@@ -85,11 +95,34 @@ require __DIR__ . '/templates/header.php';
     </section>
 
     <section class="mt-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-        <h2 class="text-xl font-bold text-content">Mine bilannoncer</h2>
-        <div class="mt-6 rounded-lg border border-dashed border-primary/20 px-6 py-10 text-center">
-            <p class="font-medium text-content">Dine bilannoncer bliver vist her</p>
-            <p class="mt-1 text-sm text-content/60">Kommer senere.</p>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 class="text-xl font-bold text-content">Mine bilannoncer</h2>
+            <a class="text-sm font-semibold text-accent hover:underline" href="create-listing.php">Opret ny annonce</a>
         </div>
+
+        <?php if (empty($userListings)): ?>
+            <div class="mt-6 rounded-lg border border-dashed border-primary/20 px-6 py-10 text-center">
+                <p class="font-medium text-content">Du har ingen bilannoncer endnu</p>
+                <a class="mt-2 inline-block text-sm font-semibold text-accent hover:underline" href="create-listing.php">Opret din første annonce</a>
+            </div>
+        <?php else: ?>
+            <div class="mt-6 divide-y divide-primary/10 overflow-hidden rounded-xl border border-primary/10">
+                <?php foreach ($userListings as $listing): ?>
+                    <article class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p class="font-bold text-content"><?= htmlspecialchars(trim($listing['brand_name'] . ' ' . $listing['model_name'])) ?></p>
+                            <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars($listing['title']) ?></p>
+                            <p class="mt-2 text-sm font-semibold text-content"><?= number_format((float) $listing['price'], 0, ',', '.') ?> kr.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="rounded-full bg-primary/5 px-3 py-1 text-xs font-semibold capitalize text-content/65"><?= htmlspecialchars($listing['status']) ?></span>
+                            <a class="rounded-lg border border-primary/15 px-4 py-2 text-sm font-semibold text-content transition hover:border-accent hover:text-accent"
+                               href="edit-listing.php?id=<?= (int) $listing['id'] ?>">Rediger</a>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
     </section>
 </main>
 

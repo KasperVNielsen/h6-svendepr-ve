@@ -19,7 +19,6 @@ $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $_SERVER['REQUEST_METHOD'] = 'GET';
 require_once __DIR__ . '/../backend/user.php';
 $_SERVER['REQUEST_METHOD'] = $requestMethod;
-require_once __DIR__ . '/templates/profile-image.php';
 
 $userId = (int) $_SESSION['user_id'];
 $user = getUser($userId);
@@ -49,9 +48,25 @@ if ($requestMethod === 'POST') {
     }
 
     if ($action === 'update_profile_image') {
-        $imageMessage = saveProfileImage($userId, $_FILES['profile_image'] ?? null);
+        $oldProfileImageName = !empty($user['profile_image']) ? basename($user['profile_image']) : '';
+        $legacyProfileImagePath = __DIR__ . '/images/profile-images/' . $oldProfileImageName;
+        $profileImage = $_FILES['profile_image'] ?? [];
+
+        // updateProfileImage() builds its filename from the supplied upload name.
+        // Add a random suffix here so repeated/originally identical names cannot collide.
+        if (isset($profileImage['name']) && is_string($profileImage['name'])) {
+            $originalName = pathinfo($profileImage['name'], PATHINFO_FILENAME);
+            $profileImage['name'] = $originalName . '-' . bin2hex(random_bytes(8));
+        }
+
+        $imageMessage = updateProfileImage($userId, $profileImage);
 
         if ($imageMessage['success']) {
+            // Remove images created by the former frontend helper from its legacy folder.
+            if ($oldProfileImageName !== '' && is_file($legacyProfileImagePath)) {
+                unlink($legacyProfileImagePath);
+            }
+
             $user = getUser($userId);
         }
     }
@@ -135,7 +150,7 @@ if ($requestMethod === 'POST') {
 }
 
 $profileImageName = !empty($user['profile_image']) ? basename($user['profile_image']) : '';
-$profileImageFilePath = __DIR__ . '/images/profile-images/' . $profileImageName;
+$profileImageFilePath = __DIR__ . '/profile-images/' . $profileImageName;
 $hasProfileImage = $profileImageName !== '' && is_file($profileImageFilePath);
 
 require __DIR__ . '/templates/header.php';
@@ -157,7 +172,7 @@ require __DIR__ . '/templates/header.php';
         <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
             <?php if ($hasProfileImage): ?>
                 <img class="h-24 w-24 shrink-0 rounded-full object-cover"
-                     src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
+                     src="<?= $basePath ?>frontend/profile-images/<?= rawurlencode($profileImageName) ?>"
                      alt="Dit profilbillede">
             <?php else: ?>
                 <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-primary text-white">
@@ -172,13 +187,13 @@ require __DIR__ . '/templates/header.php';
                 <label class="mb-2 block font-medium text-content" for="profile_image">Vælg profilbillede</label>
                 <input class="block w-full rounded-lg border border-primary/20 bg-page text-sm text-content file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-3 file:font-semibold file:text-content"
                        type="file" id="profile_image" name="profile_image"
-                       accept="image/png,image/jpeg,image/webp" required>
+                       accept="image/png,image/jpeg,image/webp,image/gif" required>
                 <?php if ($imageMessage !== null): ?>
                     <p class="mt-2 text-sm <?= $imageMessage['success'] ? 'text-success' : 'text-danger' ?>">
                         <?= htmlspecialchars($imageMessage['message']) ?>
                     </p>
                 <?php else: ?>
-                    <p class="mt-2 text-sm text-content/60">JPG, PNG eller WebP. Maksimalt 5 MB.</p>
+                    <p class="mt-2 text-sm text-content/60">JPG, PNG, WebP eller GIF. Maksimalt 5 MB.</p>
                 <?php endif; ?>
 
                 <button class="mt-4 rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
