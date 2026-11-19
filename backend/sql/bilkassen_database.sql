@@ -447,6 +447,13 @@ CREATE TABLE `settings` (
     UNIQUE KEY `uq_settings_key` (`key_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_danish_ci;
 
+INSERT INTO `settings` (`key_name`, `value`, `description`) VALUES
+(
+    'synsbasen_api_token',
+    '',
+    'API token for Synsbasen vehicle lookup'
+);
+
 CREATE TABLE auctions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     listing_id INT UNSIGNED NOT NULL UNIQUE,

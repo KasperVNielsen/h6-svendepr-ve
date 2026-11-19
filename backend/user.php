@@ -297,7 +297,7 @@ function updateProfileImage(int $id, array $file)
         return ['success' => false, 'message' => 'Kunne ikke gemme billedet.'];
     }
 
-    // 7. Fetch the old image path and delete the file from disk
+    //Fetch the old image path and delete the file from disk
     $stmt = $pdo->prepare("SELECT profile_image FROM users WHERE id = ?");
     $stmt->execute([$id]);
     $old = $stmt->fetchColumn();
@@ -309,7 +309,7 @@ function updateProfileImage(int $id, array $file)
         }
     }
 
-    // 8. Only store the relative path in the database
+    //Only store the relative path in the database
     $dbPath = 'profile-images/' . $filename;
     $stmt = $pdo->prepare("UPDATE users SET profile_image = ? WHERE id = ?");
     $stmt->execute([$dbPath, $id]);
