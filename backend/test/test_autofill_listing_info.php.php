@@ -275,8 +275,6 @@ if (
 }
 
 $autofill = [
-    'brand_id' => null, // Database matching is performed by the web endpoint.
-    'model_id' => null, // Database matching is performed by the web endpoint.
     'title' => $title !== '' ? $title : null,
     'engine_info' => trim(implode(' ', array_filter([
         $vehicle['variant'] ?? null,
@@ -350,9 +348,6 @@ out();
 out('Brand from API: ' . valueForDisplay($vehicle['brand'] ?? null));
 out('Model from API: ' . valueForDisplay($vehicle['model'] ?? null));
 out();
-out('Note: brand_id and model_id are null in this CLI test because the');
-out('database name matching is handled by backend/api/vehicle-lookup.php.');
-out('Only listing autofill fields are displayed; raw API data is not dumped.');
-out();
+
 
 exit(0);
