@@ -200,5 +200,59 @@ function addEmployee() {
     }
 }
 
+function deleteEmployee() {
+    global $pdo;
 
+     isLoggedIn();
+
+    $ownerId = $_SESSION['user_id'];
+
+    // Tjek at felterne er udfyldt
+    if (empty($_POST['employee_id']) || empty($_POST['company_id'])) {
+        return "Medarbejder ID og firma ID skal angives";
+    }
+
+    $employeeId = (int)$_POST['employee_id'];
+    $companyId = (int)$_POST['company_id'];
+
+    // Tjek at den logget ind bruger ejer firmaet
+    $checkOwner = $pdo->prepare("
+        SELECT id FROM companies 
+        WHERE id = ? AND owner_user_id = ?
+    ");
+    $checkOwner->execute([$companyId, $ownerId]);
+
+    if ($checkOwner->rowCount() === 0) {
+        return "Du har ikke tilladelse til at fjerne medarbejdere fra dette firma";
+    }
+
+    // Tjek at medarbejderen findes i firmaet
+    $checkEmp = $pdo->prepare("
+        SELECT id FROM company_employees 
+        WHERE company_id = ? AND user_id = ?
+    ");
+    $checkEmp->execute([$companyId, $employeeId]);
+
+    if ($checkEmp->rowCount() === 0) {
+        return "Medarbejderen findes ikke i dette firma";
+    }
+
+    // Forhindr at ejeren sletter sig selv
+    if ($employeeId === $ownerId) {
+        return "Du kan ikke fjerne dig selv som ejer";
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            DELETE FROM company_employees 
+            WHERE company_id = ? AND user_id = ?
+        ");
+        $stmt->execute([$companyId, $employeeId]);
+
+        return "Medarbejder fjernet!";
+
+    } catch (PDOException $e) {
+        return "Fejl: " . $e->getMessage();
+    }
+  }
 ?>
