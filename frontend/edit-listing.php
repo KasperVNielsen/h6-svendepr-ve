@@ -9,6 +9,7 @@ if (!isLoggedIn()) {
     exit;
 }
 
+// Validate the listing ID from the URL.
 $listingId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 
 if (!$listingId || $listingId < 1) {
@@ -16,6 +17,7 @@ if (!$listingId || $listingId < 1) {
     exit('Annoncen blev ikke fundet.');
 }
 
+// Load the listing and check ownership.
 $seller = findSeller((int) $_SESSION['user_id']);
 $statement = $pdo->prepare('SELECT * FROM car_listings WHERE id = ?');
 $statement->execute([$listingId]);
@@ -31,6 +33,7 @@ if (!$listing || (!$ownsAsUser && !$ownsAsCompany)) {
     exit('Annoncen blev ikke fundet.');
 }
 
+// Load the options used in the form.
 $brands = $pdo->query('SELECT id, name FROM brands WHERE is_active = 1 ORDER BY name')
     ->fetchAll(PDO::FETCH_ASSOC);
 $models = $pdo->query('SELECT id, brand_id, name FROM models WHERE is_active = 1 ORDER BY name')
@@ -38,14 +41,17 @@ $models = $pdo->query('SELECT id, brand_id, name FROM models WHERE is_active = 1
 $equipmentOptions = $pdo->query('SELECT id, name, category FROM equipment WHERE is_active = 1 ORDER BY category, name')
     ->fetchAll(PDO::FETCH_ASSOC);
 
+// Load the selected equipment.
 $statement = $pdo->prepare('SELECT equipment_id FROM listing_equipment WHERE listing_id = ?');
 $statement->execute([$listingId]);
 $savedEquipment = array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN));
 
+// Load the current images.
 $statement = $pdo->prepare('SELECT filename, is_main FROM car_images WHERE listing_id = ? ORDER BY sort_order, id');
 $statement->execute([$listingId]);
 $listingImages = $statement->fetchAll(PDO::FETCH_ASSOC);
 
+// Protect edit and delete requests against CSRF.
 $csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 $_SESSION['csrf_token'] = $csrfToken;
 $message = null;
@@ -53,6 +59,7 @@ $requestAction = $_SERVER['REQUEST_METHOD'] === 'POST' ? ($_POST['action'] ?? ''
 $isEditPost = $requestAction === 'edit_listing';
 $isDeletePost = $requestAction === 'delete_listing';
 
+// Handle edit and delete requests.
 if ($isEditPost || $isDeletePost) {
     if (!isset($_POST['csrf_token']) || !hash_equals($csrfToken, $_POST['csrf_token'])) {
         $message = ['success' => false, 'text' => 'Formularen er udløbet. Prøv igen.'];
@@ -78,10 +85,12 @@ if ($isEditPost || $isDeletePost) {
     }
 }
 
+// Show a message after a successful update.
 if (isset($_GET['updated'])) {
     $message = ['success' => true, 'text' => 'Annoncen er opdateret.'];
 }
 
+// Reuse submitted values after errors.
 $formValue = static function (string $field) use ($isEditPost, $listing): string {
     $value = $isEditPost ? ($_POST[$field] ?? '') : ($listing[$field] ?? '');
     return htmlspecialchars((string) $value);
@@ -98,6 +107,7 @@ $selectedEquipment = $isEditPost && is_array($_POST['equipment'] ?? null)
     ? array_map('strval', $_POST['equipment'])
     : $savedEquipment;
 
+// Configure number fields as: field => [label, step].
 $numberFields = [
     'horsepower' => ['Hestekræfter', '1'],
     'torque' => ['Moment (Nm)', '1'],
@@ -336,6 +346,7 @@ require __DIR__ . '/templates/header.php';
 </main>
 
 <script>
+    // Filter models by the selected brand.
     const brandSelect = document.getElementById('brand_id');
     const modelSelect = document.getElementById('model_id');
     const modelOptions = Array.from(modelSelect.options).slice(1);
