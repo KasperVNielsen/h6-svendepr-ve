@@ -282,7 +282,7 @@ function updateProfileImage(int $id, array $file)
     $original = pathinfo($file['name'], PATHINFO_FILENAME);
     $original = preg_replace('/[^A-Za-z0-9\-_]/', '-', $original);
 
-    $uploadDir = __DIR__ . '/../frontend/profile-images/';
+    $uploadDir = __DIR__ . '/../frontend/images/profile-images/';
 
     //Create the folder if it doesn't exist
     if (!is_dir($uploadDir)) {

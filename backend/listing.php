@@ -102,6 +102,7 @@ function sanitizeListingInput() {
 }
 
 
+
 function createListing() {
     global $pdo;
 
@@ -218,6 +219,7 @@ function createListing() {
 
         // Use the correct model ID in the listing
         $data['model_id'] = $modelId;
+
 
         $stmt = $pdo->prepare("
             INSERT INTO car_listings (
@@ -374,6 +376,7 @@ function createListing() {
             }
         }
 
+
         $pdo->commit();
 
         return "Annonce oprettet! ID: " . $listingId;
@@ -389,6 +392,7 @@ function createListing() {
         return "Der opstod en fejl. Prøv igen senere.";
     }
 }
+
 
 
 function editListing($listingId) {
