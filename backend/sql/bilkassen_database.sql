@@ -178,7 +178,7 @@ CREATE TABLE `car_listings` (
     -- Pris og salg
     `price` DECIMAL(12,2) NOT NULL,
     `price_type` ENUM('fast','forhandling') NOT NULL DEFAULT 'fast',
-    `status` ENUM('aktiv','solgt','reserveret','inaktiv') NOT NULL DEFAULT 'aktiv',
+    `status` ENUM('aktiv','solgt','reserveret','slettet','inaktiv') NOT NULL DEFAULT 'aktiv',
 
     -- Stand
     `condition` ENUM('brugt','ny','demobil') NOT NULL DEFAULT 'brugt',
@@ -462,7 +462,7 @@ CREATE TABLE auctions (
     current_bid DECIMAL(10,2) NULL,
     starts_at DATETIME NOT NULL,
     ends_at DATETIME NOT NULL,
-    status ENUM('planlagt','aktiv','slut','solgt','ikke_solgt') NOT NULL DEFAULT 'planlagt',
+    status ENUM('planlagt','aktiv','slut','solgt','slettet','ikke_solgt') NOT NULL DEFAULT 'planlagt',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (listing_id) REFERENCES car_listings(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_danish_ci;
