@@ -101,6 +101,7 @@ function sanitizeListingInput() {
     return $data;
 }
 
+
 function createListing() {
     global $pdo;
 
@@ -108,53 +109,188 @@ function createListing() {
 
     $userId = $_SESSION['user_id'];
 
-    $seller = findSeller($_SESSION['user_id']);
+    $seller = findSeller($userId);
     $sellerUserId = $seller['user_id'];
     $sellerCompanyId = $seller['company_id'];
 
     $data = sanitizeListingInput();
+
     if (is_string($data)) {
-        return $data; 
+        return $data;
     }
-    
+
     try {
         $pdo->beginTransaction();
 
+        $brandId = (int)($data['brand_id'] ?? 0);
+        $modelId = (int)($data['model_id'] ?? 0);
+        $modelName = trim($data['model_name'] ?? $_POST['model_name'] ?? '');
+        $category = $data['category'] ?? null;
+
+        if ($brandId <= 0) {
+            throw new Exception('Ugyldigt bilmærke.');
+        }
+
+        // Check whether selected model belongs to selected brand
+        if ($modelId > 0) {
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM models
+                WHERE id = ? AND brand_id = ? AND is_active = 1
+                LIMIT 1
+            ");
+
+            $stmt->execute([$modelId, $brandId]);
+            $modelId = (int)($stmt->fetchColumn() ?: 0);
+        }
+
+        // If no valid model ID, search by model name
+        if ($modelId === 0 && $modelName !== '') {
+
+            $stmt = $pdo->prepare("
+                SELECT id
+                FROM models
+                WHERE brand_id = ?
+                AND LOWER(name) = LOWER(?)
+                LIMIT 1
+            ");
+
+            $stmt->execute([$brandId, $modelName]);
+            $modelId = (int)($stmt->fetchColumn() ?: 0);
+
+            // Create model if it doesn't exist
+            if ($modelId === 0) {
+
+                $slug = strtolower(trim($modelName));
+                $slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
+                $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+                $slug = trim($slug, '-');
+
+                if ($slug === '') {
+                    throw new Exception('Ugyldigt modelnavn.');
+                }
+
+                // Ensure unique slug
+                $baseSlug = $slug;
+                $counter = 1;
+
+                while (true) {
+                    $stmt = $pdo->prepare("
+                        SELECT id FROM models
+                        WHERE slug = ?
+                        LIMIT 1
+                    ");
+
+                    $stmt->execute([$slug]);
+
+                    if (!$stmt->fetchColumn()) {
+                        break;
+                    }
+
+                    $slug = $baseSlug . '-' . $counter++;
+                }
+
+                $stmt = $pdo->prepare("
+                    INSERT INTO models (
+                        brand_id,
+                        name,
+                        slug,
+                        category,
+                        is_active,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, 1, NOW())
+                ");
+
+                $stmt->execute([
+                    $brandId,
+                    $modelName,
+                    $slug,
+                    $category
+                ]);
+
+                $modelId = (int)$pdo->lastInsertId();
+            }
+        }
+
+        if ($modelId <= 0) {
+            throw new Exception('Kunne ikke finde eller oprette bilmodellen.');
+        }
+
+        // Use the correct model ID in the listing
+        $data['model_id'] = $modelId;
+
         $stmt = $pdo->prepare("
             INSERT INTO car_listings (
-            seller_user_id, seller_company_id, brand_id, model_id,
-            price, price_type, status, `condition`, engine_info, horsepower, torque,
-            cylinders, fuel_type, fuel_consumption, co2_emission, euro_norm, periodic_tax,
-            acceleration, top_speed, gear_type, gear_count, drive_wheels,
-            weight, payload, towing_capacity, max_towing_brake, `length`, width, height,
-            trunk_size, tank_capacity, doors, abs_brakes, esp, airbags,
-            model_year, first_registration, mileage, color, color_type, new_price,
-            category, body_type, title, description, general_info, main_image,
-            view_count, is_featured, is_active
-        ) VALUES (
-            ?, ?, ?, ?, ?, ?, 'aktiv', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', 0, 0, 1
-        )
-    ");
+                seller_user_id, seller_company_id, brand_id, model_id,
+                price, price_type, status, `condition`, engine_info, horsepower, torque,
+                cylinders, fuel_type, fuel_consumption, co2_emission, euro_norm, periodic_tax,
+                acceleration, top_speed, gear_type, gear_count, drive_wheels,
+                weight, payload, towing_capacity, max_towing_brake, `length`, width, height,
+                trunk_size, tank_capacity, doors, abs_brakes, esp, airbags,
+                model_year, first_registration, mileage, color, color_type, new_price,
+                category, body_type, title, description, general_info, main_image,
+                view_count, is_featured, is_active
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, 'aktiv', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, '', 0, 0, 1
+            )
+        ");
 
-    $stmt->execute([
-        $sellerUserId, $sellerCompanyId, $data['brand_id'], $data['model_id'],
-        $data['price'], $data['price_type'], $data['condition'], $data['engine_info'],
-        $data['horsepower'], $data['torque'], $data['cylinders'], $data['fuel_type'],
-        $data['fuel_consumption'], $data['co2_emission'], $data['euro_norm'], $data['periodic_tax'],
-        $data['acceleration'], $data['top_speed'], $data['gear_type'], $data['gear_count'],
-        $data['drive_wheels'], $data['weight'], $data['payload'], $data['towing_capacity'],
-        $data['max_towing_brake'], $data['length'], $data['width'], $data['height'],
-        $data['trunk_size'], $data['tank_capacity'], $data['doors'], $data['abs_brakes'],
-        $data['esp'], $data['airbags'], $data['model_year'], $data['first_registration'],
-        $data['mileage'], $data['color'], $data['color_type'], $data['new_price'],
-        $data['category'], $data['body_type'], $data['title'], $data['description'],
-        $data['general_info']
-    ]); 
+        $stmt->execute([
+            $sellerUserId,
+            $sellerCompanyId,
+            $data['brand_id'],
+            $data['model_id'],
+            $data['price'],
+            $data['price_type'],
+            $data['condition'],
+            $data['engine_info'],
+            $data['horsepower'],
+            $data['torque'],
+            $data['cylinders'],
+            $data['fuel_type'],
+            $data['fuel_consumption'],
+            $data['co2_emission'],
+            $data['euro_norm'],
+            $data['periodic_tax'],
+            $data['acceleration'],
+            $data['top_speed'],
+            $data['gear_type'],
+            $data['gear_count'],
+            $data['drive_wheels'],
+            $data['weight'],
+            $data['payload'],
+            $data['towing_capacity'],
+            $data['max_towing_brake'],
+            $data['length'],
+            $data['width'],
+            $data['height'],
+            $data['trunk_size'],
+            $data['tank_capacity'],
+            $data['doors'],
+            $data['abs_brakes'],
+            $data['esp'],
+            $data['airbags'],
+            $data['model_year'],
+            $data['first_registration'],
+            $data['mileage'],
+            $data['color'],
+            $data['color_type'],
+            $data['new_price'],
+            $data['category'],
+            $data['body_type'],
+            $data['title'],
+            $data['description'],
+            $data['general_info']
+        ]);
+
         $listingId = (int)$pdo->lastInsertId();
 
-        //  handle pisc 
         if (!empty($_FILES['images']['name'][0])) {
+
             $uploadDir = __DIR__ . '/../frontend/images/listings/' . $listingId . '/';
+
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0755, true);
             }
@@ -163,13 +299,18 @@ function createListing() {
             $mainImagePath = null;
 
             foreach ($_FILES['images']['tmp_name'] as $index => $tmpName) {
-                if ($_FILES['images']['error'][$index] !== UPLOAD_ERR_OK) continue;
+
+                if ($_FILES['images']['error'][$index] !== UPLOAD_ERR_OK) {
+                    continue;
+                }
 
                 $originalName = basename($_FILES['images']['name'][$index]);
+
                 $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
                 $mime = mime_content_type($tmpName);
-                if (!in_array($mime, $allowedMimes)) continue;
-                if ($_FILES['images']['size'][$index] > 5 * 1024 * 1024) continue; // 5 MB max
+
+                if (!in_array($mime, $allowedMimes, true)) continue;
+                if ($_FILES['images']['size'][$index] > 5 * 1024 * 1024) continue;
 
                 $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '', $originalName);
                 $finalName = $listingId . '_' . $index . '_' . $safeName;
@@ -177,6 +318,7 @@ function createListing() {
                 $targetPath = $uploadDir . $finalName;
 
                 if (move_uploaded_file($tmpName, $targetPath)) {
+
                     $dbPath = 'listings/' . $listingId . '/' . $finalName;
                     $isMain = 0;
 
@@ -187,9 +329,13 @@ function createListing() {
                     }
 
                     $imgStmt = $pdo->prepare("
-                        INSERT INTO car_images (listing_id, filename, original_name, file_size, mime_type, sort_order, is_main)
+                        INSERT INTO car_images (
+                            listing_id, filename, original_name,
+                            file_size, mime_type, sort_order, is_main
+                        )
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     ");
+
                     $imgStmt->execute([
                         $listingId,
                         $dbPath,
@@ -203,28 +349,47 @@ function createListing() {
             }
 
             if ($mainImagePath) {
-                $upd = $pdo->prepare("UPDATE car_listings SET main_image = ? WHERE id = ?");
+                $upd = $pdo->prepare("
+                    UPDATE car_listings
+                    SET main_image = ?
+                    WHERE id = ?
+                ");
+
                 $upd->execute([$mainImagePath, $listingId]);
             }
         }
 
-        //  handle equipment 
         if (!empty($_POST['equipment']) && is_array($_POST['equipment'])) {
-            $eqStmt = $pdo->prepare("INSERT INTO listing_equipment (listing_id, equipment_id) VALUES (?, ?)");
+
+            $eqStmt = $pdo->prepare("
+                INSERT INTO listing_equipment (listing_id, equipment_id)
+                VALUES (?, ?)
+            ");
+
             foreach ($_POST['equipment'] as $eqId) {
-                $eqStmt->execute([$listingId, (int)$eqId]);
+                $eqStmt->execute([
+                    $listingId,
+                    (int)$eqId
+                ]);
             }
         }
 
         $pdo->commit();
+
         return "Annonce oprettet! ID: " . $listingId;
 
-    } catch (PDOException $e) {
-      if ($pdo->inTransaction()) $pdo->rollBack();
+    } catch (Throwable $e) {
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        error_log('createListing error: ' . $e->getMessage());
+
         return "Der opstod en fejl. Prøv igen senere.";
-        //return error . $e->getMessage();              
     }
 }
+
 
 function editListing($listingId) {
     global $pdo;
@@ -424,7 +589,11 @@ function deleteListing($listingId) {
     $sellerCompanyId = $seller['company_id'];
 
     //  TJEK AT ANNONCEN FINDES OG TILHØRER BRUGEREN 
-    $stmt = $pdo->prepare("SELECT id FROM car_listings WHERE id = ? AND is_active = 1");
+    $stmt = $pdo->prepare("
+    SELECT id, seller_user_id, seller_company_id
+    FROM car_listings
+    WHERE id = ? AND is_active = 1
+    ");
     $stmt->execute([$listingId]);
     $listing = $stmt->fetch(PDO::FETCH_ASSOC);
 
