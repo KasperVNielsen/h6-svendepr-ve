@@ -123,10 +123,6 @@ function createListing() {
     try {
         $pdo->beginTransaction();
 
-        // =====================================
-        // HANDLE MODEL: FIND OR CREATE
-        // =====================================
-
         $brandId = (int)($data['brand_id'] ?? 0);
         $modelId = (int)($data['model_id'] ?? 0);
         $modelName = trim($data['model_name'] ?? $_POST['model_name'] ?? '');
@@ -224,9 +220,6 @@ function createListing() {
         // Use the correct model ID in the listing
         $data['model_id'] = $modelId;
 
-        // =====================================
-        // CREATE CAR LISTING
-        // =====================================
 
         $stmt = $pdo->prepare("
             INSERT INTO car_listings (
@@ -295,10 +288,6 @@ function createListing() {
         ]);
 
         $listingId = (int)$pdo->lastInsertId();
-
-        // =====================================
-        // HANDLE PICTURES
-        // =====================================
 
         if (!empty($_FILES['images']['name'][0])) {
 
@@ -371,10 +360,6 @@ function createListing() {
                 $upd->execute([$mainImagePath, $listingId]);
             }
         }
-
-        // =====================================
-        // HANDLE EQUIPMENT
-        // =====================================
 
         if (!empty($_POST['equipment']) && is_array($_POST['equipment'])) {
 
