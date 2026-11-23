@@ -201,4 +201,163 @@ function addEmployee() {
 }
 
 
+function deleteCompany() {
+    global $pdo;
+
+    requireLogin();
+
+    $userId = $_SESSION['user_id'];
+
+    if (empty($_POST['company_id'])) {
+        return "Firma ID mangler";
+    }
+
+    $companyId = (int)$_POST['company_id'];
+
+    // Check that the user owns the company
+    $check = $pdo->prepare("
+        SELECT id
+        FROM companies
+        WHERE id = ?
+        AND owner_user_id = ?
+        AND is_active = 1
+    ");
+    $check->execute([$companyId, $userId]);
+
+    if (!$check->fetchColumn()) {
+        return "Du ejer ikke dette firma";
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        //Remove company employees
+        $stmt = $pdo->prepare("
+            DELETE FROM company_employees
+            WHERE company_id = ?
+        ");
+        $stmt->execute([$companyId]);
+
+        //Reset owner's role to normal user
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET role_id = 1
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId]);
+
+        //Soft delete company and start 30 day retention
+        $stmt = $pdo->prepare("
+            UPDATE companies
+            SET is_active = 0,
+                deleted_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$companyId]);
+
+        $pdo->commit();
+
+        return "Firmaet er deaktiveret. Oplysningerne gemmes i 30 dage.";
+
+    } catch (Throwable $e) {
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        error_log('deleteCompany: ' . $e->getMessage());
+
+        return "Der opstod en fejl. Prøv igen senere.";
+    }
+}
+
+
+function reactivateCompany() {
+    global $pdo;
+
+    isLoggedIn();
+
+    $userId = $_SESSION['user_id'];
+
+    if (empty($_POST['company_id'])) {
+        return "Firma ID mangler";
+    }
+
+    $companyId = (int)$_POST['company_id'];
+
+    try {
+        $pdo->beginTransaction();
+
+        // Check that the company belongs to the user,
+        // is deactivated, and is within the 30-day period
+        $check = $pdo->prepare("
+            SELECT *
+            FROM companies
+            WHERE id = ?
+              AND owner_user_id = ?
+              AND is_active = 0
+              AND deleted_at IS NOT NULL
+              AND deleted_at >= NOW() - INTERVAL 30 DAY
+            FOR UPDATE
+        ");
+
+        $check->execute([$companyId, $userId]);
+        $company = $check->fetch(PDO::FETCH_ASSOC);
+
+        if (!$company) {
+            $pdo->rollBack();
+
+            return "Firmaet findes ikke, er allerede aktivt, "
+                 . "eller fristen for genaktivering er udløbet.";
+        }
+
+        //Reactivate company and reset deletion timestamp
+        $stmt = $pdo->prepare("
+            UPDATE companies
+            SET is_active = 1,
+                deleted_at = NULL
+            WHERE id = ?
+              AND owner_user_id = ?
+        ");
+        $stmt->execute([$companyId, $userId]);
+
+        //Restore owner as company employee
+        $stmt = $pdo->prepare("
+            INSERT INTO company_employees (
+                company_id, user_id, position,
+                can_create_listings,
+                can_edit_listings,
+                can_manage_transactions,
+                is_active
+            ) VALUES (?, ?, 'Ejer', 1, 1, 1, 1)
+        ");
+        $stmt->execute([$companyId, $userId]);
+
+        //Restore user's owner role
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET role_id = 2
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId]);
+
+        $pdo->commit();
+
+        return "Firma genaktiveret! Velkommen tilbage, "
+             . htmlspecialchars($company['company_name']);
+
+    } catch (Throwable $e) {
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        error_log('reactivateCompany: ' . $e->getMessage());
+
+        return "Fejl ved genaktivering. Prøv igen senere.";
+    }
+}
+
+
+
 ?>

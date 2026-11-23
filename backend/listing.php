@@ -17,6 +17,74 @@ function getListings($limit = 30){
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+
+
+function getCarInfo(int $listingId)
+{
+    global $pdo;
+    try {
+        // Get all car listing information
+        $stmt = $pdo->prepare("
+            SELECT
+                cl.*,
+                b.name AS brand_name,
+                m.name AS model_name
+            FROM car_listings cl
+            LEFT JOIN brands b ON cl.brand_id = b.id
+            LEFT JOIN models m ON cl.model_id = m.id
+            WHERE cl.id = :listing_id
+              AND cl.is_active = 1
+            LIMIT 1
+        ");
+
+        $stmt->execute(['listing_id' => $listingId]);
+        $car = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$car) {
+            return null;
+        }
+
+        // Get all car images
+        $stmt = $pdo->prepare("
+            SELECT
+                id,
+                filename,
+                original_name,
+                file_size,
+                mime_type,
+                sort_order,
+                is_main
+            FROM car_images
+            WHERE listing_id = :listing_id
+            ORDER BY is_main DESC, sort_order ASC
+        ");
+
+        $stmt->execute(['listing_id' => $listingId]);
+        $car['images'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Get all equipment
+        $stmt = $pdo->prepare("
+            SELECT
+                e.id,
+                e.name
+            FROM listing_equipment le
+            INNER JOIN equipment e ON le.equipment_id = e.id
+            WHERE le.listing_id = :listing_id
+        ");
+
+        $stmt->execute(['listing_id' => $listingId]);
+        $car['equipment'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $car;
+
+    } catch (PDOException $e) {
+        error_log("getCarInfo error: " . $e->getMessage());
+        return null;
+    }
+}
+
+
+
 // identifies which company a user is allowed to create listings for, whether they own the company or work there with the appropriate permission.
 function findSeller($userId) {
     global $pdo;
@@ -100,7 +168,6 @@ function sanitizeListingInput() {
 
     return $data;
 }
-
 
 
 function createListing() {
@@ -766,5 +833,7 @@ function buyListing($listingId) {
         return "Something went wrong. Please try again later.";
     }
 }
+
+//get listing info
 ?>
 

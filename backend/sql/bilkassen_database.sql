@@ -87,6 +87,7 @@ CREATE TABLE `companies` (
     `is_verified` TINYINT(1) NOT NULL DEFAULT 0,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted_at` TIMESTAMP NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_companies_cvr` (`cvr`),
     UNIQUE KEY `uq_companies_owner` (`owner_user_id`),
