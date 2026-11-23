@@ -27,7 +27,16 @@ $formattedPhone = preg_match('/^[0-9]{8}$/', $phone)
     ? implode(' ', str_split($phone, 2))
     : ($phone !== '' ? $phone : 'Ikke angivet');
 
-$statement = $pdo->prepare("\n    SELECT cl.id, cl.title, cl.price, cl.status, cl.is_active, cl.main_image,\n           b.name AS brand_name, m.name AS model_name\n    FROM car_listings cl\n    JOIN brands b ON cl.brand_id = b.id\n    JOIN models m ON cl.model_id = m.id\n    WHERE cl.seller_user_id = ?\n    ORDER BY cl.created_at DESC\n");
+$statement = $pdo->prepare("
+    SELECT cl.id, cl.title, cl.price, cl.status, cl.is_active, cl.main_image,
+           b.name AS brand_name, m.name AS model_name
+    FROM car_listings cl
+    JOIN brands b ON cl.brand_id = b.id
+    JOIN models m ON cl.model_id = m.id
+    WHERE cl.seller_user_id = ?
+      AND cl.is_active = 1
+    ORDER BY cl.created_at DESC
+");
 $statement->execute([(int) $_SESSION['user_id']]);
 $userListings = $statement->fetchAll(PDO::FETCH_ASSOC);
 
