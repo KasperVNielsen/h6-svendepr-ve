@@ -113,7 +113,7 @@ function findSeller($userId) {
 
 function sanitizeListingInput() {
     //  validate fields
-    $required = ['brand_id','model_id','title','price','condition','model_year','mileage','fuel_type'];
+    $required = ['brand_id','title','price','condition','model_year','mileage','fuel_type'];
     foreach ($required as $field) {
         if (empty($_POST[$field])) {
             return "Feltet '$field' skal udfyldes";
