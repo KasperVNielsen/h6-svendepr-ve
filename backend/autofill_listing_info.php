@@ -101,6 +101,9 @@ if ($vin !== '' && !preg_match('/^[A-HJ-NPR-Z0-9]{17}$/', $vin)) {
     ]);
 }
 
+// A new lookup replaces any previously verified vehicle in this session.
+unset($_SESSION['vehicle_listing_lookup']);
+
 $stmt = $pdo->prepare("
     SELECT value
     FROM settings
@@ -378,7 +381,9 @@ if (is_array($taxes) && isset($taxes['total_amount'])) {
 // such as price, condition, description and general_info are not returned.
 $data = [
     'brand_id' => $brandId,
+    'brand_name' => $brandName,
     'model_id' => $modelId,
+    'model_name' => $modelName,
     'title' => $title !== '' ? $title : null,
 
     'engine_info' => nullableString(implode(' ', array_filter([
@@ -425,6 +430,19 @@ $data = [
 
     'category' => nullableString($v['category'] ?? null),
     'body_type' => nullableString($v['body_type'] ?? $body['body_type'] ?? null),
+];
+
+// Keep the verified vehicle identity on the server. createListing() uses this
+// instead of trusting editable values sent by the browser.
+$_SESSION['vehicle_listing_lookup'] = [
+    'brand_id' => $brandId,
+    'brand_name' => $brandName,
+    'model_id' => $modelId ?? 0,
+    'model_name' => $modelName,
+    'category' => $data['category'],
+    'lookup_type' => $vin !== '' ? 'vin' : 'plate',
+    'lookup_value' => $vin !== '' ? $vin : $plate,
+    'looked_up_at' => time(),
 ];
 
 respond(200, [
