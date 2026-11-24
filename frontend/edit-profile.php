@@ -150,7 +150,7 @@ if ($requestMethod === 'POST') {
 }
 
 $profileImageName = !empty($user['profile_image']) ? basename($user['profile_image']) : '';
-$profileImageFilePath = __DIR__ . '/profile-images/' . $profileImageName;
+$profileImageFilePath = __DIR__ . '/images/profile-images/' . $profileImageName;
 $hasProfileImage = $profileImageName !== '' && is_file($profileImageFilePath);
 
 require __DIR__ . '/templates/header.php';
@@ -172,7 +172,7 @@ require __DIR__ . '/templates/header.php';
         <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
             <?php if ($hasProfileImage): ?>
                 <img class="h-24 w-24 shrink-0 rounded-full object-cover"
-                     src="<?= $basePath ?>frontend/profile-images/<?= rawurlencode($profileImageName) ?>"
+                     src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
                      alt="Dit profilbillede">
             <?php else: ?>
                 <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-primary text-white">
