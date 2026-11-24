@@ -4,6 +4,48 @@ $basePath = '../';
 
 require_once __DIR__ . '/../backend/listing.php';
 
+// Provide the image helper until listing.php includes its own implementation.
+if (!function_exists('uploadCarImage')) {
+    function uploadCarImage(int $listingId, array $file): ?string
+    {
+        if (
+            empty($file['tmp_name'])
+            || !isset($file['error'], $file['size'])
+            || $file['error'] !== UPLOAD_ERR_OK
+            || $file['size'] <= 0
+            || $file['size'] > 5 * 1024 * 1024
+            || !is_uploaded_file($file['tmp_name'])
+        ) {
+            return null;
+        }
+
+        $mime = mime_content_type($file['tmp_name']);
+        $extensions = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+        ];
+
+        if (!isset($extensions[$mime])) {
+            return null;
+        }
+
+        $uploadDir = __DIR__ . '/images/listings/' . $listingId . '/';
+
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+            return null;
+        }
+
+        $filename = $listingId . '_' . bin2hex(random_bytes(12)) . '.' . $extensions[$mime];
+
+        if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
+            return null;
+        }
+
+        return 'listings/' . $listingId . '/' . $filename;
+    }
+}
+
 if (!isLoggedIn()) {
     header('Location: login.php');
     exit;
@@ -47,7 +89,7 @@ $statement->execute([$listingId]);
 $savedEquipment = array_map('strval', $statement->fetchAll(PDO::FETCH_COLUMN));
 
 // Load the current images.
-$statement = $pdo->prepare('SELECT filename, is_main FROM car_images WHERE listing_id = ? ORDER BY sort_order, id');
+$statement = $pdo->prepare('SELECT id, filename, original_name, is_main FROM car_images WHERE listing_id = ? ORDER BY sort_order, id');
 $statement->execute([$listingId]);
 $listingImages = $statement->fetchAll(PDO::FETCH_ASSOC);
 
@@ -153,34 +195,64 @@ require __DIR__ . '/templates/header.php';
         </div>
     <?php endif; ?>
 
-    <?php if (!empty($listingImages)): ?>
-        <section class="mb-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-            <h2 class="text-xl font-bold text-content">Nuværende billeder</h2>
-            <p class="mt-1 text-sm text-content/60">Billedredigering bliver tilføjet, når backendens uploadfunktion er klar.</p>
-            <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                <?php foreach ($listingImages as $image): ?>
-                    <?php
-                    $filename = str_replace('\\', '/', (string) $image['filename']);
-                    $safeImage = !str_contains($filename, '..')
-                        ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($filename, '/'))))
-                        : null;
-                    ?>
-                    <?php if ($safeImage !== null): ?>
-                        <div class="relative overflow-hidden rounded-lg bg-primary/5">
-                            <img class="aspect-[4/3] h-full w-full object-cover" src="<?= htmlspecialchars($safeImage) ?>" alt="Billede af bilen">
-                            <?php if (!empty($image['is_main'])): ?>
-                                <span class="absolute left-2 top-2 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-white">Hovedbillede</span>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-            </div>
-        </section>
-    <?php endif; ?>
-
-    <form class="space-y-8" method="post">
+    <form class="space-y-8" method="post" enctype="multipart/form-data" id="edit_listing_form">
         <input type="hidden" name="action" value="edit_listing">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+
+        <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
+            <h2 class="text-xl font-bold text-content">Billeder</h2>
+
+            <?php if (!empty($listingImages)): ?>
+                <h3 class="mt-6 font-semibold text-content">Nuværende billeder</h3>
+                <p class="mt-1 text-sm text-content/60">Vælg annoncens hovedbillede, eller markér billeder, der skal fjernes.</p>
+                <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                    <?php foreach ($listingImages as $image): ?>
+                        <?php
+                        $filename = str_replace('\\', '/', (string) $image['filename']);
+                        $safeImage = !str_contains($filename, '..')
+                            ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($filename, '/'))))
+                            : null;
+                        ?>
+                        <?php if ($safeImage !== null): ?>
+                            <div class="existing-image overflow-hidden rounded-lg border border-primary/15 bg-page">
+                                <img class="aspect-[4/3] w-full object-cover"
+                                     src="<?= htmlspecialchars($safeImage) ?>"
+                                     alt="<?= htmlspecialchars((string) ($image['original_name'] ?: 'Billede af bilen')) ?>">
+                                <div class="space-y-2 p-3 text-sm">
+                                    <label class="flex cursor-pointer items-center gap-2 font-semibold text-content">
+                                        <input class="main-image-radio h-4 w-4"
+                                               type="radio"
+                                               name="main_image_choice"
+                                               value="existing:<?= (int) $image['id'] ?>"<?= !empty($image['is_main']) ? ' checked' : '' ?>>
+                                        Hovedbillede
+                                    </label>
+                                    <label class="flex cursor-pointer items-center gap-2 text-danger">
+                                        <input class="delete-image-checkbox h-4 w-4"
+                                               type="checkbox"
+                                               name="delete_images[]"
+                                               value="<?= (int) $image['id'] ?>">
+                                        Fjern billede
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <p class="mt-3 text-sm text-content/60">Annoncen har ingen billeder endnu.</p>
+            <?php endif; ?>
+
+            <div class="mt-6 border-t border-primary/10 pt-6">
+                <label class="mb-2 block font-medium text-content" for="images">Tilføj nye billeder</label>
+                <input class="block w-full rounded-lg border border-primary/20 bg-page text-sm text-content file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-3 file:font-semibold"
+                       type="file" id="images" name="images[]" accept="image/jpeg,image/png,image/webp" multiple>
+                <p class="mt-2 text-sm text-content/60">JPG, PNG eller WebP. Maksimalt 5 MB pr. billede.</p>
+                <div class="mt-5 hidden" id="image_preview_wrapper">
+                    <p class="mb-3 text-sm font-semibold text-content">Nye billeder</p>
+                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" id="image_preview" aria-live="polite"></div>
+                </div>
+            </div>
+        </section>
 
         <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
             <h2 class="text-xl font-bold text-content">Grundoplysninger</h2>
@@ -350,6 +422,11 @@ require __DIR__ . '/templates/header.php';
     const brandSelect = document.getElementById('brand_id');
     const modelSelect = document.getElementById('model_id');
     const modelOptions = Array.from(modelSelect.options).slice(1);
+    const imageInput = document.getElementById('images');
+    const imagePreview = document.getElementById('image_preview');
+    const imagePreviewWrapper = document.getElementById('image_preview_wrapper');
+    const deleteImageCheckboxes = Array.from(document.querySelectorAll('.delete-image-checkbox'));
+    let imagePreviewUrls = [];
 
     function filterModels(keepSelection = true) {
         const selectedModel = keepSelection ? modelSelect.value : '';
@@ -361,6 +438,96 @@ require __DIR__ . '/templates/header.php';
 
     brandSelect.addEventListener('change', () => filterModels(false));
     filterModels(true);
+
+    function chooseAvailableMainImage() {
+        const selected = document.querySelector('input[name="main_image_choice"]:checked');
+
+        if (selected && !selected.disabled) {
+            return;
+        }
+
+        const replacement = Array.from(document.querySelectorAll('input[name="main_image_choice"]'))
+            .find((radio) => !radio.disabled);
+
+        if (replacement) {
+            replacement.checked = true;
+        }
+    }
+
+    deleteImageCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+            const card = checkbox.closest('.existing-image');
+            const radio = card.querySelector('.main-image-radio');
+
+            radio.disabled = checkbox.checked;
+            card.classList.toggle('opacity-50', checkbox.checked);
+            chooseAvailableMainImage();
+        });
+    });
+
+    function clearImagePreviews() {
+        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+        imagePreviewUrls = [];
+        imagePreview.replaceChildren();
+    }
+
+    imageInput.addEventListener('change', () => {
+        clearImagePreviews();
+
+        const files = Array.from(imageInput.files || []);
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const maxSize = 5 * 1024 * 1024;
+
+        imagePreviewWrapper.classList.toggle('hidden', files.length === 0);
+
+        files.forEach((file, index) => {
+            const isValid = allowedTypes.includes(file.type) && file.size > 0 && file.size <= maxSize;
+            const card = document.createElement('label');
+            card.className = 'cursor-pointer overflow-hidden rounded-lg border border-primary/15 bg-page';
+
+            if (allowedTypes.includes(file.type)) {
+                const imageUrl = URL.createObjectURL(file);
+                imagePreviewUrls.push(imageUrl);
+
+                const image = document.createElement('img');
+                image.className = 'aspect-[4/3] w-full object-cover';
+                image.src = imageUrl;
+                image.alt = `Forhåndsvisning af ${file.name}`;
+                card.append(image);
+            }
+
+            const controls = document.createElement('span');
+            controls.className = 'flex items-start gap-2 p-3 text-sm';
+
+            const radio = document.createElement('input');
+            radio.className = 'mt-0.5 h-4 w-4 shrink-0';
+            radio.type = 'radio';
+            radio.name = 'main_image_choice';
+            radio.value = `new:${index}`;
+            radio.disabled = !isValid;
+
+            const text = document.createElement('span');
+            text.className = isValid ? 'min-w-0 text-content' : 'min-w-0 text-danger';
+
+            const choice = document.createElement('span');
+            choice.className = 'block font-semibold';
+            choice.textContent = isValid ? 'Brug som hovedbillede' : 'Filen kan ikke uploades';
+
+            const filename = document.createElement('span');
+            filename.className = 'mt-1 block truncate text-xs opacity-65';
+            filename.textContent = file.name;
+            filename.title = file.name;
+
+            text.append(choice, filename);
+            controls.append(radio, text);
+            card.append(controls);
+            imagePreview.append(card);
+        });
+
+        chooseAvailableMainImage();
+    });
+
+    window.addEventListener('beforeunload', clearImagePreviews);
 </script>
 
 <?php require __DIR__ . '/templates/footer.php'; ?>

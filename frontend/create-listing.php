@@ -9,10 +9,6 @@ if (!isLoggedIn()) {
     exit;
 }
 
-$brands = $pdo->query("SELECT id, name FROM brands WHERE is_active = 1 ORDER BY name")
-    ->fetchAll(PDO::FETCH_ASSOC);
-$models = $pdo->query("SELECT id, brand_id, name FROM models WHERE is_active = 1 ORDER BY name")
-    ->fetchAll(PDO::FETCH_ASSOC);
 $equipmentOptions = $pdo->query("SELECT id, name, category FROM equipment WHERE is_active = 1 ORDER BY category, name")
     ->fetchAll(PDO::FETCH_ASSOC);
 
@@ -23,6 +19,12 @@ $message = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_listing') {
     if (!isset($_POST['csrf_token']) || !hash_equals($csrfToken, $_POST['csrf_token'])) {
         $message = ['success' => false, 'text' => 'Formularen er udløbet. Prøv igen.'];
+    } elseif (
+        ($_POST['vehicle_lookup_complete'] ?? '') !== '1'
+        || empty($_POST['brand_name'])
+        || empty($_POST['model_name'])
+    ) {
+        $message = ['success' => false, 'text' => 'Hent først bilen via nummerplade eller stelnummer.'];
     } else {
         $result = createListing();
         $success = str_starts_with($result, 'Annonce oprettet!');
@@ -61,7 +63,7 @@ require __DIR__ . '/templates/header.php';
             &larr; Tilbage til bilerne
         </a>
         <h1 class="mt-3 text-3xl font-bold text-content">Opret bilannonce</h1>
-        <p class="mt-2 text-content/65">Slå bilen op via nummerpladen, kontrollér oplysningerne og udfyld resten.</p>
+        <p class="mt-2 text-content/65">Slå bilen op via nummerplade eller stelnummer, kontrollér oplysningerne og udfyld resten.</p>
     </div>
 
     <?php if ($message !== null): ?>
@@ -78,15 +80,15 @@ require __DIR__ . '/templates/header.php';
     <?php endif; ?>
 
     <section class="mb-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-        <h2 class="text-xl font-bold text-content">Hent oplysninger via nummerplade</h2>
-        <p class="mt-1 text-sm text-content/60">Nummerpladen skal skrives uden mellemrum, eksempelvis AB12345.</p>
+        <h2 class="text-xl font-bold text-content">Hent biloplysninger</h2>
+        <p class="mt-1 text-sm text-content/60">Skriv en nummerplade som AB12345 eller et stelnummer på 17 tegn.</p>
 
         <div class="mt-5 flex flex-col gap-3 sm:flex-row">
             <div class="flex-1">
-                <label class="sr-only" for="registration_lookup">Nummerplade</label>
+                <label class="sr-only" for="vehicle_lookup">Nummerplade eller stelnummer</label>
                 <input class="w-full rounded-lg border border-primary/20 px-4 py-3 uppercase outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-                       type="text" id="registration_lookup" maxlength="7" autocomplete="off"
-                       placeholder="AB12345">
+                       type="text" id="vehicle_lookup" maxlength="17" autocomplete="off"
+                       placeholder="AB12345 eller W0L0SDL68C4173363">
             </div>
             <button class="rounded-lg bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/85 disabled:cursor-wait disabled:opacity-60"
                     type="button" id="lookup_vehicle">
@@ -99,33 +101,28 @@ require __DIR__ . '/templates/header.php';
     <form class="space-y-8" method="post" enctype="multipart/form-data" id="listing_form">
         <input type="hidden" name="action" value="create_listing">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+        <input type="hidden" name="brand_id" id="brand_id" value="<?= $old('brand_id') ?>">
+        <input type="hidden" name="model_id" id="model_id" value="<?= $old('model_id') ?>">
+        <input type="hidden" name="vehicle_lookup_complete" id="vehicle_lookup_complete" value="<?= $old('vehicle_lookup_complete') ?>">
+        <input type="hidden" name="vehicle_lookup_type" id="vehicle_lookup_type" value="<?= $old('vehicle_lookup_type') ?>">
+        <input type="hidden" name="vehicle_lookup_value" id="vehicle_lookup_value" value="<?= $old('vehicle_lookup_value') ?>">
 
         <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
             <h2 class="text-xl font-bold text-content">Grundoplysninger</h2>
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
-                    <label class="mb-2 block font-medium text-content" for="brand_id">Mærke</label>
-                    <select class="w-full rounded-lg border border-primary/20 px-4 py-3" id="brand_id" name="brand_id" required>
-                        <option value="">Vælg mærke</option>
-                        <?php foreach ($brands as $brand): ?>
-                            <option value="<?= (int) $brand['id'] ?>"<?= $selected('brand_id', (string) $brand['id']) ?>>
-                                <?= htmlspecialchars($brand['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="mb-2 block font-medium text-content" for="brand_name">Mærke</label>
+                    <input class="w-full cursor-not-allowed rounded-lg border border-primary/15 bg-primary/5 px-4 py-3 text-content/70"
+                           type="text" id="brand_name" name="brand_name" value="<?= $old('brand_name') ?>"
+                           placeholder="Hentes fra biloplysninger" readonly required>
                 </div>
                 <div>
-                    <label class="mb-2 block font-medium text-content" for="model_id">Model</label>
-                    <select class="w-full rounded-lg border border-primary/20 px-4 py-3" id="model_id" name="model_id" required>
-                        <option value="">Vælg model</option>
-                        <?php foreach ($models as $model): ?>
-                            <option value="<?= (int) $model['id'] ?>"
-                                    data-brand-id="<?= (int) $model['brand_id'] ?>"<?= $selected('model_id', (string) $model['id']) ?>>
-                                <?= htmlspecialchars($model['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="mb-2 block font-medium text-content" for="model_name">Model</label>
+                    <input class="w-full cursor-not-allowed rounded-lg border border-primary/15 bg-primary/5 px-4 py-3 text-content/70"
+                           type="text" id="model_name" name="model_name" value="<?= $old('model_name') ?>"
+                           placeholder="Hentes fra biloplysninger" readonly required>
                 </div>
+                <p class="text-sm text-content/55 sm:col-span-2">Mærke og model hentes fra biloplysninger og kan ikke ændres manuelt.</p>
                 <div class="sm:col-span-2">
                     <label class="mb-2 block font-medium text-content" for="title">Overskrift</label>
                     <input class="w-full rounded-lg border border-primary/20 px-4 py-3" type="text" id="title" name="title"
@@ -333,6 +330,10 @@ require __DIR__ . '/templates/header.php';
                     <input class="block w-full rounded-lg border border-primary/20 bg-page text-sm text-content file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-3 file:font-semibold"
                            type="file" id="images" name="images[]" accept="image/jpeg,image/png,image/webp" multiple>
                     <p class="mt-2 text-sm text-content/60">JPG, PNG eller WebP. Maksimalt 5 MB pr. billede.</p>
+                    <div class="mt-5 hidden" id="image_preview_wrapper">
+                        <p class="mb-3 text-sm font-semibold text-content">Vælg annoncens hovedbillede</p>
+                        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" id="image_preview" aria-live="polite"></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -345,58 +346,123 @@ require __DIR__ . '/templates/header.php';
 </main>
 
 <script>
-    const brandSelect = document.getElementById('brand_id');
-    const modelSelect = document.getElementById('model_id');
-    const modelOptions = Array.from(modelSelect.options).slice(1);
-
-    function filterModels(keepSelection = true) {
-        const brandId = brandSelect.value;
-        const selectedModel = keepSelection ? modelSelect.value : '';
-
-        modelOptions.forEach((option) => {
-            option.hidden = brandId !== '' && option.dataset.brandId !== brandId;
-        });
-
-        if (!keepSelection || modelSelect.selectedOptions[0]?.hidden) {
-            modelSelect.value = '';
-        } else {
-            modelSelect.value = selectedModel;
-        }
-    }
-
-    brandSelect.addEventListener('change', () => filterModels(false));
-    filterModels(true);
-
     const lookupButton = document.getElementById('lookup_vehicle');
-    const lookupInput = document.getElementById('registration_lookup');
+    const lookupInput = document.getElementById('vehicle_lookup');
     const lookupMessage = document.getElementById('lookup_message');
     const listingForm = document.getElementById('listing_form');
+    const brandIdInput = document.getElementById('brand_id');
+    const modelIdInput = document.getElementById('model_id');
+    const brandNameInput = document.getElementById('brand_name');
+    const modelNameInput = document.getElementById('model_name');
+    const lookupCompleteInput = document.getElementById('vehicle_lookup_complete');
+    const lookupTypeInput = document.getElementById('vehicle_lookup_type');
+    const lookupValueInput = document.getElementById('vehicle_lookup_value');
+    const imageInput = document.getElementById('images');
+    const imagePreview = document.getElementById('image_preview');
+    const imagePreviewWrapper = document.getElementById('image_preview_wrapper');
+    let imagePreviewUrls = [];
 
     function showLookupMessage(text, success = false) {
         lookupMessage.textContent = text;
         lookupMessage.className = `mt-3 text-sm ${success ? 'text-success' : 'text-danger'}`;
     }
 
-    lookupButton.addEventListener('click', async () => {
-        const plate = lookupInput.value.toUpperCase().replace(/\s+/g, '');
+    function clearVehicleIdentity() {
+        brandIdInput.value = '';
+        modelIdInput.value = '';
+        brandNameInput.value = '';
+        modelNameInput.value = '';
+        lookupCompleteInput.value = '';
+        lookupTypeInput.value = '';
+        lookupValueInput.value = '';
+    }
 
-        if (!/^[A-Z]{2}\d{5}$/.test(plate)) {
-            showLookupMessage('Skriv en gyldig nummerplade, eksempelvis AB12345.');
+    function clearImagePreviews() {
+        imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+        imagePreviewUrls = [];
+        imagePreview.replaceChildren();
+    }
+
+    imageInput.addEventListener('change', () => {
+        clearImagePreviews();
+
+        const files = Array.from(imageInput.files || []);
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        const maxSize = 5 * 1024 * 1024;
+        const firstValidIndex = files.findIndex((file) => allowedTypes.includes(file.type) && file.size <= maxSize);
+
+        imagePreviewWrapper.classList.toggle('hidden', files.length === 0);
+
+        files.forEach((file, index) => {
+            const isValid = allowedTypes.includes(file.type) && file.size <= maxSize;
+            const imageUrl = URL.createObjectURL(file);
+            imagePreviewUrls.push(imageUrl);
+
+            const card = document.createElement('label');
+            card.className = 'cursor-pointer overflow-hidden rounded-lg border border-primary/15 bg-page';
+
+            const image = document.createElement('img');
+            image.className = 'aspect-[4/3] w-full object-cover';
+            image.src = imageUrl;
+            image.alt = `Forhåndsvisning af ${file.name}`;
+
+            const controls = document.createElement('span');
+            controls.className = 'flex items-start gap-2 p-3 text-sm';
+
+            const radio = document.createElement('input');
+            radio.className = 'mt-0.5 h-4 w-4 shrink-0';
+            radio.type = 'radio';
+            radio.name = 'main_image_index';
+            radio.value = String(index);
+            radio.disabled = !isValid;
+            radio.checked = index === firstValidIndex;
+
+            const text = document.createElement('span');
+            text.className = isValid ? 'min-w-0 text-content' : 'min-w-0 text-danger';
+
+            const choice = document.createElement('span');
+            choice.className = 'block font-semibold';
+            choice.textContent = isValid ? 'Brug som hovedbillede' : 'Filen kan ikke uploades';
+
+            const filename = document.createElement('span');
+            filename.className = 'mt-1 block truncate text-xs opacity-65';
+            filename.textContent = file.name;
+            filename.title = file.name;
+
+            text.append(choice, filename);
+            controls.append(radio, text);
+            card.append(image, controls);
+            imagePreview.append(card);
+        });
+    });
+
+    window.addEventListener('beforeunload', clearImagePreviews);
+
+    lookupInput.addEventListener('input', clearVehicleIdentity);
+
+    lookupButton.addEventListener('click', async () => {
+        const identifier = lookupInput.value.toUpperCase().replace(/\s+/g, '');
+        const isPlate = /^[A-Z]{2}\d{5}$/.test(identifier);
+        const isVin = /^[A-HJ-NPR-Z0-9]{17}$/.test(identifier);
+
+        if (!isPlate && !isVin) {
+            showLookupMessage('Skriv en gyldig nummerplade eller et stelnummer på 17 tegn.');
             return;
         }
 
+        clearVehicleIdentity();
         lookupButton.disabled = true;
         lookupButton.textContent = 'Henter…';
         lookupMessage.className = 'mt-3 text-sm text-content/60';
         lookupMessage.textContent = 'Henter oplysninger fra Synsbasen…';
 
         try {
-            const response = await fetch(`../backend/autofill_listing_info.php?plate=${encodeURIComponent(plate)}`, {
-                headers: {'Accept': 'application/json'}
-            });
+            const parameter = isPlate ? 'plate' : 'vin';
+            const url = `../backend/autofill_listing_info.php?${parameter}=${encodeURIComponent(identifier)}`;
+            const response = await fetch(url, {headers: {'Accept': 'application/json'}});
 
             if (!(response.headers.get('content-type') || '').includes('application/json')) {
-                throw new Error('Nummerpladeopslaget er ikke tilgængeligt endnu.');
+                throw new Error('Bilopslaget er ikke tilgængeligt endnu.');
             }
 
             const result = await response.json();
@@ -406,9 +472,17 @@ require __DIR__ . '/templates/header.php';
             }
 
             const data = result.data || {};
+            const brandName = data.brand_name || result.brand_name || '';
+            const modelName = data.model_name || result.model_name || '';
+
+            if (!data.brand_id || !brandName || !modelName) {
+                throw new Error('Backend mangler at returnere bilens mærke og model.');
+            }
 
             Object.entries(data).forEach(([field, value]) => {
-                if (value === null || value === '') return;
+                if (value === null || value === '' || ['brand_id', 'model_id', 'brand_name', 'model_name'].includes(field)) {
+                    return;
+                }
 
                 const input = listingForm.elements.namedItem(field);
                 if (!input) return;
@@ -418,22 +492,34 @@ require __DIR__ . '/templates/header.php';
                 } else {
                     input.value = value;
                 }
-
-                if (field === 'brand_id') {
-                    input.dispatchEvent(new Event('change'));
-                }
             });
 
-            if (!result.brand_matched || !result.model_matched) {
-                showLookupMessage('Oplysningerne blev hentet, men mærke eller model skal vælges manuelt.', true);
-            } else {
-                showLookupMessage('Biloplysningerne er hentet. Kontrollér felterne før oprettelse.', true);
-            }
+            brandIdInput.value = data.brand_id;
+            modelIdInput.value = data.model_id || '0';
+            brandNameInput.value = brandName;
+            modelNameInput.value = modelName;
+            lookupCompleteInput.value = '1';
+            lookupTypeInput.value = parameter;
+            lookupValueInput.value = identifier;
+
+            const message = result.model_matched
+                ? 'Biloplysningerne er hentet. Kontrollér de øvrige felter.'
+                : 'Biloplysningerne er hentet. Modellen oprettes, når annoncen gemmes.';
+            showLookupMessage(message, true);
         } catch (error) {
+            clearVehicleIdentity();
             showLookupMessage(error.message || 'Biloplysningerne kunne ikke hentes.');
         } finally {
             lookupButton.disabled = false;
             lookupButton.textContent = 'Hent biloplysninger';
+        }
+    });
+
+    listingForm.addEventListener('submit', (event) => {
+        if (lookupCompleteInput.value !== '1' || !brandNameInput.value || !modelNameInput.value) {
+            event.preventDefault();
+            showLookupMessage('Hent først bilens mærke og model via nummerplade eller stelnummer.');
+            lookupInput.focus();
         }
     });
 </script>

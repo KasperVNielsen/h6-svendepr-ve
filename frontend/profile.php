@@ -19,7 +19,7 @@ if ($user === null) {
 }
 
 $profileImageName = !empty($user['profile_image']) ? basename($user['profile_image']) : '';
-$profileImageFilePath = __DIR__ . '/profile-images/' . $profileImageName;
+$profileImageFilePath = __DIR__ . '/images/profile-images/' . $profileImageName;
 $hasProfileImage = $profileImageName !== '' && is_file($profileImageFilePath);
 $memberSince = !empty($user['created_at']) ? date('d.m.Y', strtotime($user['created_at'])) : 'Ikke angivet';
 $phone = $user['phone'] ?? '';
@@ -40,6 +40,10 @@ $statement = $pdo->prepare("
 $statement->execute([(int) $_SESSION['user_id']]);
 $userListings = $statement->fetchAll(PDO::FETCH_ASSOC);
 
+$statement = $pdo->prepare('SELECT id, company_name, cvr FROM companies WHERE owner_user_id = ? LIMIT 1');
+$statement->execute([(int) $_SESSION['user_id']]);
+$ownedCompany = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+
 require __DIR__ . '/templates/header.php';
 ?>
 
@@ -47,6 +51,12 @@ require __DIR__ . '/templates/header.php';
     <?php if (isset($_GET['deleted'])): ?>
         <div class="mb-7 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-success">
             <p class="font-semibold">Bilannoncen er slettet.</p>
+        </div>
+    <?php endif; ?>
+
+    <?php if (isset($_GET['company_created'])): ?>
+        <div class="mb-7 rounded-xl border border-success/20 bg-success/10 px-5 py-4 text-success">
+            <p class="font-semibold">Firmaet er oprettet og tilknyttet din profil.</p>
         </div>
     <?php endif; ?>
 
@@ -67,7 +77,7 @@ require __DIR__ . '/templates/header.php';
             <div class="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
                 <?php if ($hasProfileImage): ?>
                     <img class="h-24 w-24 shrink-0 rounded-full border-4 border-white/20 object-cover"
-                         src="<?= $basePath ?>frontend/profile-images/<?= rawurlencode($profileImageName) ?>"
+                         src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
                          alt="Profilbillede for <?= htmlspecialchars($user['first_name']) ?>">
                 <?php else: ?>
                     <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-4 border-white/20 bg-white/10 text-white">
@@ -100,6 +110,27 @@ require __DIR__ . '/templates/header.php';
                 <p class="text-sm font-medium text-content/60">Medlem siden</p>
                 <p class="mt-1 font-semibold text-content"><?= htmlspecialchars($memberSince) ?></p>
             </div>
+        </div>
+    </section>
+
+    <section class="mt-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xl font-bold text-content">Firma</h2>
+                <?php if ($ownedCompany !== null): ?>
+                    <p class="mt-2 text-content/65">
+                        <?= htmlspecialchars($ownedCompany['company_name']) ?>
+                        <span class="text-content/45">&middot; CVR <?= htmlspecialchars($ownedCompany['cvr']) ?></span>
+                    </p>
+                <?php else: ?>
+                    <p class="mt-2 text-content/65">Opret en firmaprofil, hvis du vil sælge biler som virksomhed.</p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($ownedCompany === null): ?>
+                <a class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
+                   href="create-company.php">Opret firma</a>
+            <?php endif; ?>
         </div>
     </section>
 
