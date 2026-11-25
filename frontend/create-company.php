@@ -12,7 +12,7 @@ ob_end_clean();
 $_SERVER['REQUEST_METHOD'] = $requestMethod;
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -38,7 +38,7 @@ if ($requestMethod === 'POST') {
         $result = createCompany();
 
         if ($result === 'Firma oprettet!') {
-            header('Location: profile.php?company_created=1');
+            header('Location: ./profil?company_created=1');
             exit;
         }
 
@@ -55,7 +55,7 @@ require __DIR__ . '/templates/header.php';
 
 <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
     <div class="mb-8">
-        <a class="text-sm font-semibold text-accent hover:underline" href="profile.php">&larr; Tilbage til min profil</a>
+        <a class="text-sm font-semibold text-accent hover:underline" href="profil">&larr; Tilbage til min profil</a>
         <p class="mt-5 text-sm font-semibold uppercase tracking-wider text-accent">Firmaprofil</p>
         <h1 class="mt-1 text-3xl font-bold text-content">Opret firma</h1>
         <p class="mt-3 leading-7 text-content/65">Du kan oprette ét firma på din profil. Du bliver automatisk registreret som firmaets ejer.</p>
@@ -66,7 +66,7 @@ require __DIR__ . '/templates/header.php';
             <h2 class="text-xl font-bold text-content">Du ejer allerede et firma</h2>
             <p class="mt-2 text-content/65"><?= htmlspecialchars($existingCompany['company_name']) ?> er tilknyttet din profil.</p>
             <a class="mt-6 inline-flex rounded-lg bg-accent px-5 py-3 font-semibold text-white transition hover:bg-accent/80"
-               href="profile.php">Gå til min profil</a>
+               href="profil">Gå til min profil</a>
         </section>
     <?php else: ?>
         <?php if ($message !== null): ?>

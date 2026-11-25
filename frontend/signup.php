@@ -5,6 +5,11 @@ $signupMessage = '';
 
 require_once __DIR__ . '/../backend/auth.php';
 
+if (isLoggedIn()) {
+    header('Location: ./');
+    exit;
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '') === 'signup') {
 
     $signupMessage = !empty($message) ? $message : createUser();
@@ -97,7 +102,7 @@ require __DIR__ . '/templates/header.php';
 
         <p class="mt-6 text-center text-sm text-content/70">
             Har du allerede en bruger?
-            <a class="font-semibold text-accent hover:underline" href="<?= $basePath ?>frontend/login.php">
+            <a class="font-semibold text-accent hover:underline" href="login">
                 Log ind
             </a>
         </p>

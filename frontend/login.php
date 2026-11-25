@@ -13,13 +13,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 
     if ($action === 'login') {
-        $loginMessage = login();
+        $loginMessage = !empty($message) ? (string) $message : login();
+
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $_SESSION['login_message'] = $loginMessage;
+        header('Location: ../login');
+        exit;
     }
 }
 
 if (isLoggedIn()) {
-    header('Location: ../index.php');
+    header('Location: ./');
     exit;
+}
+
+if (!empty($_SESSION['login_message'])) {
+    $loginMessage = (string) $_SESSION['login_message'];
+    unset($_SESSION['login_message']);
 }
 
 require __DIR__ . '/templates/header.php';
@@ -36,7 +49,7 @@ require __DIR__ . '/templates/header.php';
             </p>
         <?php endif; ?>
 
-        <form class="mt-8 space-y-5" method="post">
+        <form class="mt-8 space-y-5" method="post" action="frontend/login.php">
             <input type="hidden" name="action" value="login">
 
             <div>
@@ -69,7 +82,7 @@ require __DIR__ . '/templates/header.php';
 
         <p class="mt-6 text-center text-sm text-content/70">
             Har du ikke en bruger?
-            <a class="font-semibold text-accent hover:underline" href="<?= $basePath ?>frontend/signup.php">
+            <a class="font-semibold text-accent hover:underline" href="opret-bruger">
                 Registrer dig
             </a>
         </p>

@@ -5,7 +5,7 @@ $basePath = '../';
 require_once __DIR__ . '/../backend/auth.php';
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -14,7 +14,7 @@ require_once __DIR__ . '/../backend/user.php';
 $user = getUser((int) $_SESSION['user_id']);
 
 if ($user === null) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -67,7 +67,7 @@ require __DIR__ . '/templates/header.php';
         </div>
 
         <a class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
-           href="<?= $basePath ?>frontend/edit-profile.php">
+           href="rediger-profil">
             Rediger profil
         </a>
     </div>
@@ -77,7 +77,7 @@ require __DIR__ . '/templates/header.php';
             <div class="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
                 <?php if ($hasProfileImage): ?>
                     <img class="h-24 w-24 shrink-0 rounded-full border-4 border-white/20 object-cover"
-                         src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
+                         src="images/profile-images/<?= rawurlencode($profileImageName) ?>"
                          alt="Profilbillede for <?= htmlspecialchars($user['first_name']) ?>">
                 <?php else: ?>
                     <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-4 border-white/20 bg-white/10 text-white">
@@ -129,7 +129,7 @@ require __DIR__ . '/templates/header.php';
 
             <?php if ($ownedCompany === null): ?>
                 <a class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
-                   href="create-company.php">Opret firma</a>
+                   href="opret-firma">Opret firma</a>
             <?php endif; ?>
         </div>
     </section>
@@ -137,13 +137,13 @@ require __DIR__ . '/templates/header.php';
     <section class="mt-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xl font-bold text-content">Mine bilannoncer</h2>
-            <a class="text-sm font-semibold text-accent hover:underline" href="create-listing.php">Opret ny annonce</a>
+            <a class="text-sm font-semibold text-accent hover:underline" href="opret-annonce">Opret ny annonce</a>
         </div>
 
         <?php if (empty($userListings)): ?>
             <div class="mt-6 rounded-lg border border-dashed border-primary/20 px-6 py-10 text-center">
                 <p class="font-medium text-content">Du har ingen bilannoncer endnu</p>
-                <a class="mt-2 inline-block text-sm font-semibold text-accent hover:underline" href="create-listing.php">Opret din første annonce</a>
+                <a class="mt-2 inline-block text-sm font-semibold text-accent hover:underline" href="opret-annonce">Opret din første annonce</a>
             </div>
         <?php else: ?>
             <div class="mt-6 divide-y divide-primary/10 overflow-hidden rounded-xl border border-primary/10">
@@ -157,7 +157,7 @@ require __DIR__ . '/templates/header.php';
                         <div class="flex items-center gap-3">
                             <span class="rounded-full bg-primary/5 px-3 py-1 text-xs font-semibold capitalize text-content/65"><?= htmlspecialchars($listing['status']) ?></span>
                             <a class="rounded-lg border border-primary/15 px-4 py-2 text-sm font-semibold text-content transition hover:border-accent hover:text-accent"
-                               href="edit-listing.php?id=<?= (int) $listing['id'] ?>">Rediger</a>
+                               href="rediger-annonce?id=<?= (int) $listing['id'] ?>">Rediger</a>
                         </div>
                     </article>
                 <?php endforeach; ?>

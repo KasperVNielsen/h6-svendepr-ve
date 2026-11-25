@@ -5,7 +5,7 @@ $basePath = '../';
 require_once __DIR__ . '/../backend/listing.php';
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $success = str_starts_with($result, 'Annonce oprettet!');
 
         if ($success && preg_match('/ID:\s*(\d+)/', $result, $matches)) {
-            header('Location: create-listing.php?created=' . (int) $matches[1]);
+            header('Location: ./opret-annonce?created=' . (int) $matches[1]);
             exit;
         }
 
@@ -59,7 +59,7 @@ require __DIR__ . '/templates/header.php';
 
 <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
     <div class="mb-8">
-        <a class="text-sm font-semibold text-accent hover:underline" href="<?= $basePath ?>index.php">
+        <a class="text-sm font-semibold text-accent hover:underline" href="./">
             &larr; Tilbage til bilerne
         </a>
         <h1 class="mt-3 text-3xl font-bold text-content">Opret bilannonce</h1>
@@ -72,7 +72,7 @@ require __DIR__ . '/templates/header.php';
             : 'border-danger/20 bg-danger/10 text-danger' ?>">
             <p class="font-semibold"><?= htmlspecialchars($message['text']) ?></p>
             <?php if ($message['success'] && isset($listingId)): ?>
-                <a class="mt-2 inline-block text-sm font-semibold underline" href="<?= $basePath ?>index.php">
+                <a class="mt-2 inline-block text-sm font-semibold underline" href="./">
                     Se bilen på forsiden
                 </a>
             <?php endif; ?>
@@ -458,7 +458,7 @@ require __DIR__ . '/templates/header.php';
 
         try {
             const parameter = isPlate ? 'plate' : 'vin';
-            const url = `../backend/autofill_listing_info.php?${parameter}=${encodeURIComponent(identifier)}`;
+            const url = `api/bilopslag?${parameter}=${encodeURIComponent(identifier)}`;
             const response = await fetch(url, {headers: {'Accept': 'application/json'}});
 
             if (!(response.headers.get('content-type') || '').includes('application/json')) {
