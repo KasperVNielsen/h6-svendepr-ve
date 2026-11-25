@@ -13,6 +13,41 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 
+
+
+function getCompanyInfo(int $companyId)
+{
+    global $pdo;
+    $stmt = $pdo->prepare("
+        SELECT
+            id,
+            company_name,
+            cvr,
+            website,
+            address,
+            zip_code,
+            city,
+            phone,
+            email,
+            logo,
+            description,
+            is_verified,
+            created_at
+        FROM companies
+        WHERE id = ?
+          AND is_active = 1
+          AND deleted_at IS NULL
+        LIMIT 1
+    ");
+
+    $stmt->execute([$companyId]);
+
+    $company = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $company ?: null;
+}
+
+
 function createCompany() {
     global $pdo;
     
@@ -358,6 +393,155 @@ function reactivateCompany() {
     }
 }
 
+ function editEmployee() {
+    global $pdo;
+    
+    isLoggedIn();
+    
+    $ownerId = $_SESSION['user_id'];
+    
+    // Tjek at felterne er udfyldt
+    if (empty($_POST['employee_id']) || empty($_POST['company_id'])) {
+        return "Medarbejder ID og firma ID skal angives";
+    }
+    
+    $employeeId = (int)$_POST['employee_id'];
+    $companyId = (int)$_POST['company_id'];
+    $position = htmlspecialchars(trim($_POST['position'] ?? 'Medarbejder'));
+    $canCreate = isset($_POST['can_create']) ? 1 : 0;
+    $canEdit = isset($_POST['can_edit']) ? 1 : 0;
+    $canManage = isset($_POST['can_manage']) ? 1 : 0;
+    
+    //only the owner can change the rights
+    $checkOwner = $pdo->prepare("
+        SELECT id FROM companies 
+        WHERE id = ? AND owner_user_id = ?
+    ");
+    $checkOwner->execute([$companyId, $ownerId]);
+    
+    if ($checkOwner->rowCount() === 0) {
+        return "Du har ikke tilladelse til at redigere medarbejdere";
+    }
+    
+    //the owner cant change his own rights
+    if ($employeeId === $ownerId) {
+        return "Du kan ikke ændre dine egne ejer-rettigheder";
+    }
+    
+    //check if the employee is in the company
+    $checkEmp = $pdo->prepare("
+        SELECT id FROM company_employees 
+        WHERE company_id = ? AND user_id = ?
+    ");
+    $checkEmp->execute([$companyId, $employeeId]);
+    
+    if ($checkEmp->rowCount() === 0) {
+        return "Medarbejderen findes ikke i dette firma";
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE company_employees 
+            SET position = ?, 
+                can_create_listings = ?, 
+                can_edit_listings = ?, 
+                can_manage_transactions = ?
+            WHERE company_id = ? AND user_id = ?
+        ");
+        
+        $stmt->execute([
+            $position, 
+            $canCreate, 
+            $canEdit, 
+            $canManage, 
+            $companyId, 
+            $employeeId
+        ]);
+        
+        if ($stmt->rowCount() > 0) {
+            return "Medarbejder opdateret!";
+        } else {
+            return "Ingen ændringer foretaget";
+        }
+        
+    } catch (PDOException $e) {
+        return "Fejl: " . $e->getMessage();
+    }
+}
 
+function editCompany() {
+    global $pdo;
+    
+    isLoggedIn();
+    
+    $userId = $_SESSION['user_id'];
+    
+  
+    if (empty($_POST['company_id'])) {
+        return "Firma ID mangler";
+    }
+    
+    $companyId = (int)$_POST['company_id'];
+    
+    
+    $check = $pdo->prepare("SELECT id FROM companies WHERE id = ? AND owner_user_id = ?");
+    $check->execute([$companyId, $userId]);
+    
+    if ($check->rowCount() === 0) {
+        return "Du ejer ikke dette firma";
+    }
+    
+    // valid fields that can be changed
+    $companyName = htmlspecialchars(trim($_POST['company_name'] ?? ''));
+    $address = htmlspecialchars(trim($_POST['address'] ?? ''));
+    $zipCode = htmlspecialchars(trim($_POST['zip_code'] ?? ''));
+    $city = htmlspecialchars(trim($_POST['city'] ?? ''));
+    $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
+    $phone = htmlspecialchars(trim($_POST['phone'] ?? ''));
+    $website = htmlspecialchars(trim($_POST['website'] ?? ''));
+    $description = htmlspecialchars(trim($_POST['description'] ?? ''));
+    
+    // Tjek at påkrævede felter er udfyldt
+    if (empty($companyName) || empty($address) || empty($city) || empty($zipCode)) {
+        return "Firmanavn, adresse, by og postnummer skal udfyldes";
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE companies 
+            SET company_name = ?,
+                address = ?,
+                zip_code = ?,
+                city = ?,
+                email = ?,
+                phone = ?,
+                website = ?,
+                description = ?
+            WHERE id = ? AND owner_user_id = ?
+        ");
+        
+        $stmt->execute([
+            $companyName,
+            $address,
+            $zipCode,
+            $city,
+            $email,
+            $phone,
+            $website,
+            $description,
+            $companyId,
+            $userId
+        ]);
+        
+        if ($stmt->rowCount() > 0) {
+            return "Firmaoplysninger opdateret!";
+        } else {
+            return "Ingen ændringer foretaget";
+        }
+        
+    } catch (PDOException $e) {
+        return "Fejl: " . $e->getMessage();
+    }
+}
 
 ?>
