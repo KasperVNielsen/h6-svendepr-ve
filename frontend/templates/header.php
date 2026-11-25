@@ -30,24 +30,24 @@ $userIsLoggedIn = isLoggedIn();
 <body class="flex min-h-screen flex-col bg-page text-content">
     <header class="border-b border-white/10 bg-primary">
         <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-2">
-            <a href="<?= $basePath ?>index.php" aria-label="Gå til forsiden">
+            <a href="./" aria-label="Gå til forsiden">
                 <img class="h-16 w-auto sm:h-20"
-                     src="<?= $basePath ?>frontend/images/Logo%20-%20Bil%20kassen.png"
+                     src="images/Logo%20-%20Bil%20kassen.png"
                      alt="Bil kassen">
             </a>
 
             <?php if ($userIsLoggedIn): ?>
                 <div class="flex items-center gap-3">
                     <a class="font-semibold text-white/80 transition hover:text-white"
-                       href="<?= $basePath ?>frontend/create-listing.php">
+                       href="opret-annonce">
                         Sælg bil
                     </a>
                     <a class="font-semibold text-white/80 transition hover:text-white"
-                       href="<?= $basePath ?>frontend/profile.php">
+                       href="profil">
                         Min profil
                     </a>
 
-                    <form method="post" action="<?= $basePath ?>frontend/login.php">
+                    <form method="post" action="frontend/login.php">
                         <input type="hidden" name="action" value="logout">
                         <button class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
                                 type="submit">
@@ -57,7 +57,7 @@ $userIsLoggedIn = isLoggedIn();
                 </div>
             <?php else: ?>
                 <a class="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-accent/80"
-                   href="<?= $basePath ?>frontend/login.php">
+                   href="login">
                     Log ind
                 </a>
             <?php endif; ?>

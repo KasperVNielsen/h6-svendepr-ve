@@ -1,77 +1,108 @@
 <?php
-$pageTitle = 'BMW iX3 | Bil kassen';
 $basePath = '../';
-$listingId = max(1, (int) ($_GET['id'] ?? 1));
 
-// Hardcodet test data.
-$car = [
-    'id' => $listingId,
-    'brand' => 'BMW',
-    'model' => 'iX3',
-    'title' => 'Charged Plus M-Sport 5d',
-    'price' => 338995,
-    'condition' => 'brugt',
-    'model_year' => 2023,
-    'first_registration' => '4/2023',
-    'mileage' => 99000,
-    'fuel_type' => 'El',
-    'engine_info' => 'Elektrisk',
-    'horsepower' => 286,
-    'torque' => 400,
-    'acceleration' => '6,8 sek.',
-    'top_speed' => '180 km/t',
-    'gear_type' => 'Automatisk',
-    'drive_wheels' => 'Baghjulstræk',
-    'periodic_tax' => '920 kr. / år',
-    'weight' => '2.260 kg',
-    'max_towing_brake' => '750 kg',
-    'doors' => 5,
-    'color' => 'Hvid',
-    'color_type' => 'Metallic',
-    'body_type' => 'SUV',
-    'description' => 'Flot og velholdt elektrisk SUV med M-Sport-pakke, høj komfort og masser af udstyr. Bilen står velplejet og er klar til levering. Kontakt forhandleren for fremvisning og prøvekørsel.',
-    'images' => [
-        'sedan-white.webp',
-        'electric-blue.webp',
-        'stationcar-silver.webp',
-        'suv-red.webp',
-    ],
-    'equipment' => [
-        'Adaptiv fartpilot',
-        'Panoramasoltag',
-        '360° kamera',
-        'Parkeringssensor for og bag',
-        'Head-up display',
-        'Navigation',
-        'Apple CarPlay og Android Auto',
-        'El-sæder med memory',
-        'Sædevarme',
-        'Ratvarme',
-        'Varmepumpe',
-        'Elektrisk bagklap',
-    ],
+require_once __DIR__ . '/../backend/listing.php';
+
+$listingId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+$car = $listingId && $listingId > 0 ? getCarInfo($listingId) : null;
+
+if ($car === null) {
+    http_response_code(404);
+    $pageTitle = 'Bilannonce ikke fundet | Bil kassen';
+    require __DIR__ . '/templates/header.php';
+    ?>
+    <main class="mx-auto w-full max-w-3xl flex-1 px-6 py-16 text-center">
+        <h1 class="text-3xl font-bold text-content">Bilannoncen blev ikke fundet</h1>
+        <p class="mt-3 text-content/65">Annoncen findes ikke eller er ikke længere aktiv.</p>
+        <a class="mt-7 inline-flex rounded-lg bg-accent px-5 py-3 font-semibold text-white transition hover:bg-accent/80"
+           href="./">Tilbage til bilerne</a>
+    </main>
+    <?php
+    require __DIR__ . '/templates/footer.php';
+    exit;
+}
+
+$car['brand'] = (string) ($car['brand_name'] ?? '');
+$car['model'] = (string) ($car['model_name'] ?? '');
+
+// Convert stored image paths to safe URLs relative to this page.
+$imageUrls = [];
+foreach ($car['images'] as $image) {
+    $filename = str_replace('\\', '/', (string) ($image['filename'] ?? ''));
+
+    if ($filename === '' || str_contains($filename, '..')) {
+        continue;
+    }
+
+    $diskPath = __DIR__ . '/images/' . str_replace('/', DIRECTORY_SEPARATOR, ltrim($filename, '/'));
+    if (!is_file($diskPath)) {
+        continue;
+    }
+
+    $imageUrls[] = 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($filename, '/'))));
+}
+$car['images'] = $imageUrls;
+$car['equipment'] = array_values(array_filter(array_column($car['equipment'], 'name')));
+
+// getCarInfo() returns seller IDs; load the matching public contact details.
+if (!empty($car['seller_company_id'])) {
+    $statement = $pdo->prepare("
+        SELECT company_name, address, zip_code, city, phone, email, website, description, is_verified
+        FROM companies
+        WHERE id = ? AND is_active = 1
+        LIMIT 1
+    ");
+    $statement->execute([(int) $car['seller_company_id']]);
+    $seller = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+    $sellerType = 'Forhandler';
+} else {
+    $statement = $pdo->prepare("
+        SELECT CONCAT(first_name, ' ', last_name) AS company_name,
+               address, zip_code, city, phone, email,
+               NULL AS website, NULL AS description, is_verified
+        FROM users
+        WHERE id = ? AND is_active = 1
+        LIMIT 1
+    ");
+    $statement->execute([(int) $car['seller_user_id']]);
+    $seller = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+    $sellerType = 'Privat sælger';
+}
+
+$seller ??= [
+    'company_name' => 'Ukendt sælger',
+    'address' => '',
+    'zip_code' => '',
+    'city' => '',
+    'phone' => '',
+    'email' => '',
+    'website' => '',
+    'description' => '',
+    'is_verified' => 0,
 ];
 
-$seller = [
-    'company_name' => 'Nordic Auto Aarhus',
-    'address' => 'Bilvejen 24',
-    'zip_code' => '8260',
-    'city' => 'Viby J',
-    'phone' => '86123456',
-    'email' => 'salg@nordic-auto.dk',
-    'website' => 'www.nordic-auto.dk',
-    'description' => 'Autoriseret bilforhandler med fokus på nyere brugte biler og personlig rådgivning.',
-    'is_verified' => true,
-];
+$sellerName = trim((string) $seller['company_name']);
+$nameParts = preg_split('/\s+/', $sellerName, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+$sellerInitials = '';
+foreach (array_slice($nameParts, 0, 2) as $namePart) {
+    $sellerInitials .= mb_strtoupper(mb_substr($namePart, 0, 1));
+}
+$sellerInitials = $sellerInitials !== '' ? $sellerInitials : '?';
 
-$formattedPhone = implode(' ', str_split($seller['phone'], 2));
+$sellerPhone = trim((string) ($seller['phone'] ?? ''));
+$phoneLink = preg_replace('/[^0-9+]/', '', $sellerPhone);
+$formattedPhone = preg_match('/^[0-9]{8}$/', $sellerPhone)
+    ? implode(' ', str_split($sellerPhone, 2))
+    : $sellerPhone;
+
+$pageTitle = trim($car['brand'] . ' ' . $car['model']) . ' | Bil kassen';
 
 require __DIR__ . '/templates/header.php';
 ?>
 
 <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
     <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm text-content/60" aria-label="Brødkrummer">
-        <a class="hover:text-accent" href="<?= $basePath ?>index.php">Biler</a>
+        <a class="hover:text-accent" href="./">Biler</a>
         <span aria-hidden="true">/</span>
         <span><?= htmlspecialchars($car['brand']) ?></span>
         <span aria-hidden="true">/</span>
@@ -80,24 +111,28 @@ require __DIR__ . '/templates/header.php';
 
     <div class="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="min-w-0 space-y-8">
-            <section>
-                <div class="overflow-hidden rounded-xl bg-primary/5">
-                    <img class="aspect-[16/10] w-full object-cover"
-                         src="images/cars/<?= htmlspecialchars($car['images'][0]) ?>"
-                         alt="<?= htmlspecialchars($car['brand'] . ' ' . $car['model'] . ' ' . $car['title']) ?>">
-                </div>
+            <?php if (!empty($car['images'])): ?>
+                <section>
+                    <div class="overflow-hidden rounded-xl bg-primary/5">
+                        <img class="aspect-[16/10] w-full object-cover"
+                             src="<?= htmlspecialchars($car['images'][0]) ?>"
+                             alt="<?= htmlspecialchars(trim($car['brand'] . ' ' . $car['model'] . ' ' . $car['title'])) ?>">
+                    </div>
 
-                <div class="mt-3 grid grid-cols-3 gap-3">
-                    <?php foreach (array_slice($car['images'], 1) as $imageIndex => $image): ?>
-                        <div class="overflow-hidden rounded-lg bg-primary/5">
-                            <img class="aspect-[4/3] h-full w-full object-cover"
-                                 src="images/cars/<?= htmlspecialchars($image) ?>"
-                                 alt="Ekstra billede <?= $imageIndex + 2 ?> af bilen"
-                                 loading="lazy">
+                    <?php if (count($car['images']) > 1): ?>
+                        <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            <?php foreach (array_slice($car['images'], 1) as $imageIndex => $image): ?>
+                                <div class="overflow-hidden rounded-lg bg-primary/5">
+                                    <img class="aspect-[4/3] h-full w-full object-cover"
+                                         src="<?= htmlspecialchars($image) ?>"
+                                         alt="Ekstra billede <?= $imageIndex + 2 ?> af bilen"
+                                         loading="lazy">
+                                </div>
+                            <?php endforeach; ?>
                         </div>
-                    <?php endforeach; ?>
-                </div>
-            </section>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
 
             <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
                 <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -128,19 +163,19 @@ require __DIR__ . '/templates/header.php';
                 <dl class="mt-7 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-primary/10 sm:grid-cols-4">
                     <div class="bg-page p-4">
                         <dt class="text-xs text-content/50">Modelår</dt>
-                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars((string) $car['model_year']) ?></dd>
+                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars((string) ($car['model_year'] ?: 'Ikke angivet')) ?></dd>
                     </div>
                     <div class="bg-page p-4">
                         <dt class="text-xs text-content/50">1. registrering</dt>
-                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars($car['first_registration']) ?></dd>
+                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars((string) ($car['first_registration'] ?: 'Ikke angivet')) ?></dd>
                     </div>
                     <div class="bg-page p-4">
                         <dt class="text-xs text-content/50">Kilometertal</dt>
-                        <dd class="mt-1 font-semibold text-content"><?= number_format($car['mileage'], 0, ',', '.') ?> km</dd>
+                        <dd class="mt-1 font-semibold text-content"><?= $car['mileage'] !== null ? number_format((float) $car['mileage'], 0, ',', '.') . ' km' : 'Ikke angivet' ?></dd>
                     </div>
                     <div class="bg-page p-4">
                         <dt class="text-xs text-content/50">Drivmiddel</dt>
-                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars($car['fuel_type']) ?></dd>
+                        <dd class="mt-1 font-semibold text-content"><?= htmlspecialchars((string) ($car['fuel_type'] ?: 'Ikke angivet')) ?></dd>
                     </div>
                 </dl>
             </section>
@@ -150,83 +185,109 @@ require __DIR__ . '/templates/header.php';
                 <dl class="mt-6 grid gap-x-10 sm:grid-cols-2">
                     <?php
                     $details = [
-                        'Motor' => $car['engine_info'],
-                        'Ydelse' => $car['horsepower'] . ' hk / ' . $car['torque'] . ' Nm',
-                        'Acceleration 0-100' => $car['acceleration'],
-                        'Tophastighed' => $car['top_speed'],
-                        'Gearkasse' => $car['gear_type'],
-                        'Træk' => $car['drive_wheels'],
-                        'Periodisk afgift' => $car['periodic_tax'],
-                        'Egenvægt' => $car['weight'],
-                        'Trækvægt med bremser' => $car['max_towing_brake'],
-                        'Antal døre' => $car['doors'],
-                        'Farve' => $car['color'] . ' ' . strtolower($car['color_type']),
-                        'Karrosseri' => $car['body_type'],
+                        'Motor' => $car['engine_info'] ?: null,
+                        'Ydelse' => implode(' / ', array_filter([
+                            $car['horsepower'] ? $car['horsepower'] . ' hk' : null,
+                            $car['torque'] ? $car['torque'] . ' Nm' : null,
+                        ])),
+                        'Acceleration 0-100' => $car['acceleration'] ? $car['acceleration'] . ' sek.' : null,
+                        'Tophastighed' => $car['top_speed'] ? $car['top_speed'] . ' km/t' : null,
+                        'Gearkasse' => $car['gear_type'] ?: null,
+                        'Træk' => $car['drive_wheels'] ?: null,
+                        'Periodisk afgift' => $car['periodic_tax'] ? number_format((float) $car['periodic_tax'], 0, ',', '.') . ' kr. / år' : null,
+                        'Egenvægt' => $car['weight'] ? number_format((float) $car['weight'], 0, ',', '.') . ' kg' : null,
+                        'Trækvægt med bremser' => $car['max_towing_brake'] ? number_format((float) $car['max_towing_brake'], 0, ',', '.') . ' kg' : null,
+                        'Antal døre' => $car['doors'] ?: null,
+                        'Farve' => trim(($car['color'] ?? '') . ' ' . strtolower((string) ($car['color_type'] ?? ''))),
+                        'Karrosseri' => $car['body_type'] ?: null,
                     ];
+                    $details = array_filter($details, static fn($value): bool => $value !== null && $value !== '');
                     ?>
-                    <?php foreach ($details as $label => $value): ?>
-                        <div class="flex items-center justify-between gap-4 border-b border-primary/10 py-3">
-                            <dt class="text-sm text-content/60"><?= htmlspecialchars($label) ?></dt>
-                            <dd class="text-right text-sm font-semibold text-content"><?= htmlspecialchars((string) $value) ?></dd>
-                        </div>
-                    <?php endforeach; ?>
+                    <?php if (!empty($details)): ?>
+                        <?php foreach ($details as $label => $value): ?>
+                            <div class="flex items-center justify-between gap-4 border-b border-primary/10 py-3">
+                                <dt class="text-sm text-content/60"><?= htmlspecialchars($label) ?></dt>
+                                <dd class="text-right text-sm font-semibold text-content"><?= htmlspecialchars((string) $value) ?></dd>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="py-4 text-sm text-content/60 sm:col-span-2">Der er ikke angivet tekniske detaljer.</p>
+                    <?php endif; ?>
                 </dl>
             </section>
 
-            <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-                <h2 class="text-2xl font-bold text-content">Udstyr</h2>
-                <ul class="mt-6 grid gap-3 sm:grid-cols-2">
-                    <?php foreach ($car['equipment'] as $equipment): ?>
-                        <li class="flex items-start gap-3 text-content/80">
-                            <svg class="mt-0.5 h-5 w-5 shrink-0 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12 4 4L19 6" />
-                            </svg>
-                            <?= htmlspecialchars($equipment) ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            </section>
+            <?php if (!empty($car['equipment'])): ?>
+                <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
+                    <h2 class="text-2xl font-bold text-content">Udstyr</h2>
+                    <ul class="mt-6 grid gap-3 sm:grid-cols-2">
+                        <?php foreach ($car['equipment'] as $equipment): ?>
+                            <li class="flex items-start gap-3 text-content/80">
+                                <svg class="mt-0.5 h-5 w-5 shrink-0 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12 4 4L19 6" />
+                                </svg>
+                                <?= htmlspecialchars($equipment) ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </section>
+            <?php endif; ?>
 
             <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
                 <h2 class="text-2xl font-bold text-content">Beskrivelse</h2>
-                <p class="mt-5 whitespace-pre-line leading-7 text-content/75"><?= htmlspecialchars($car['description']) ?></p>
+                <p class="mt-5 whitespace-pre-line leading-7 text-content/75"><?= htmlspecialchars((string) ($car['description'] ?: 'Der er ikke tilføjet en beskrivelse.')) ?></p>
             </section>
         </div>
 
         <aside class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm lg:sticky lg:top-6">
-            <p class="text-sm font-semibold uppercase tracking-wider text-accent">Forhandler</p>
+            <p class="text-sm font-semibold uppercase tracking-wider text-accent"><?= htmlspecialchars($sellerType) ?></p>
             <div class="mt-3 flex items-start gap-4">
-                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white">NA</div>
+                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white"><?= htmlspecialchars($sellerInitials) ?></div>
                 <div>
                     <h2 class="text-xl font-bold text-content"><?= htmlspecialchars($seller['company_name']) ?></h2>
                     <?php if ($seller['is_verified']): ?>
                         <p class="mt-1 flex items-center gap-1.5 text-sm font-medium text-success">
-                            <span class="flex h-4 w-4 items-center justify-center rounded-full bg-success text-[10px] text-white">✓</span>
-                            Verificeret forhandler
+                            <span class="flex h-4 w-4 items-center justify-center rounded-full bg-success text-[10px] text-white">&#10003;</span>
+                            Verificeret sælger
                         </p>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <p class="mt-5 text-sm leading-6 text-content/65"><?= htmlspecialchars($seller['description']) ?></p>
+            <?php if (!empty($seller['description'])): ?>
+                <p class="mt-5 text-sm leading-6 text-content/65"><?= htmlspecialchars($seller['description']) ?></p>
+            <?php endif; ?>
 
-            <address class="mt-5 space-y-2 border-t border-primary/10 pt-5 text-sm not-italic text-content/70">
-                <p><?= htmlspecialchars($seller['address']) ?></p>
-                <p><?= htmlspecialchars($seller['zip_code'] . ' ' . $seller['city']) ?></p>
-                <p><?= htmlspecialchars($formattedPhone) ?></p>
-                <p class="break-all"><?= htmlspecialchars($seller['email']) ?></p>
-            </address>
+            <?php if (!empty($seller['address']) || !empty($seller['city']) || $formattedPhone !== '' || !empty($seller['email'])): ?>
+                <address class="mt-5 space-y-2 border-t border-primary/10 pt-5 text-sm not-italic text-content/70">
+                    <?php if (!empty($seller['address'])): ?>
+                        <p><?= htmlspecialchars($seller['address']) ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($seller['zip_code']) || !empty($seller['city'])): ?>
+                        <p><?= htmlspecialchars(trim($seller['zip_code'] . ' ' . $seller['city'])) ?></p>
+                    <?php endif; ?>
+                    <?php if ($formattedPhone !== ''): ?>
+                        <p><?= htmlspecialchars($formattedPhone) ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($seller['email'])): ?>
+                        <p class="break-all"><?= htmlspecialchars($seller['email']) ?></p>
+                    <?php endif; ?>
+                </address>
+            <?php endif; ?>
 
-            <div class="mt-6 space-y-3">
-                <a class="flex w-full items-center justify-center rounded-lg bg-accent px-4 py-3 font-semibold text-white transition hover:bg-accent/80"
-                   href="tel:+45<?= htmlspecialchars($seller['phone']) ?>">
-                    Ring til forhandler
-                </a>
-                <a class="flex w-full items-center justify-center rounded-lg border border-primary/15 px-4 py-3 font-semibold text-content transition hover:border-accent hover:text-accent"
-                   href="mailto:<?= htmlspecialchars($seller['email']) ?>?subject=Forespørgsel på <?= rawurlencode($car['brand'] . ' ' . $car['model']) ?>">
-                    Skriv til forhandler
-                </a>
-            </div>
+            <?php if ($phoneLink !== '' || !empty($seller['email'])): ?>
+                <div class="mt-6 space-y-3">
+                    <?php if ($phoneLink !== ''): ?>
+                        <a class="flex w-full items-center justify-center rounded-lg bg-accent px-4 py-3 font-semibold text-white transition hover:bg-accent/80"
+                           href="tel:<?= htmlspecialchars($phoneLink) ?>">Ring til sælger</a>
+                    <?php endif; ?>
+                    <?php if (!empty($seller['email'])): ?>
+                        <a class="flex w-full items-center justify-center rounded-lg border border-primary/15 px-4 py-3 font-semibold text-content transition hover:border-accent hover:text-accent"
+                           href="mailto:<?= htmlspecialchars($seller['email']) ?>?subject=<?= rawurlencode('Forespørgsel på ' . $car['brand'] . ' ' . $car['model']) ?>">
+                            Skriv til sælger
+                        </a>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         </aside>
     </div>
 </main>

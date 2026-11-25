@@ -1,0 +1,59 @@
+Options -MultiViews
+RewriteEngine On
+RewriteBase /h6-svendepr-ve/
+
+# Redirect old page URLs when they are requested directly in the browser.
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/view-car\.php[\s?] [NC]
+RewriteRule ^frontend/view-car\.php$ bil [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/index\.php[\s?] [NC]
+RewriteRule ^index\.php$ ./ [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/login\.php[\s?] [NC]
+RewriteRule ^frontend/login\.php$ login [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/signup\.php[\s?] [NC]
+RewriteRule ^frontend/signup\.php$ opret-bruger [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/profile\.php[\s?] [NC]
+RewriteRule ^frontend/profile\.php$ profil [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/edit-profile\.php[\s?] [NC]
+RewriteRule ^frontend/edit-profile\.php$ rediger-profil [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/create-listing\.php[\s?] [NC]
+RewriteRule ^frontend/create-listing\.php$ opret-annonce [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/edit-listing\.php[\s?] [NC]
+RewriteRule ^frontend/edit-listing\.php$ rediger-annonce [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/create-company\.php[\s?] [NC]
+RewriteRule ^frontend/create-company\.php$ opret-firma [R=302,L,NE]
+
+# Keep page routes without a trailing slash so relative links stay at project root.
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.+)/$ $1 [R=302,L]
+
+# Public page routes.
+RewriteRule ^login/?$ frontend/login.php [END,QSA]
+RewriteRule ^opret-bruger/?$ frontend/signup.php [END,QSA]
+RewriteRule ^profil/?$ frontend/profile.php [END,QSA]
+RewriteRule ^rediger-profil/?$ frontend/edit-profile.php [END,QSA]
+RewriteRule ^opret-annonce/?$ frontend/create-listing.php [END,QSA]
+RewriteRule ^rediger-annonce/?$ frontend/edit-listing.php [END,QSA]
+RewriteRule ^bil/?$ frontend/view-car.php [END,QSA]
+RewriteRule ^opret-firma/?$ frontend/create-company.php [END,QSA]
+
+# Clean public paths for uploaded/static images and the vehicle lookup endpoint.
+RewriteRule ^images/(.+)$ frontend/images/$1 [END]
+RewriteRule ^api/bilopslag/?$ backend/autofill_listing_info.php [END,QSA]

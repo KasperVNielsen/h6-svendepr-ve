@@ -47,7 +47,7 @@ if (!function_exists('uploadCarImage')) {
 }
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -109,7 +109,7 @@ if ($isEditPost || $isDeletePost) {
         $result = deleteListing($listingId);
 
         if ($result === 'Annoncen er slettet.') {
-            header('Location: profile.php?deleted=1');
+            header('Location: ./profil?deleted=1');
             exit;
         }
 
@@ -119,7 +119,7 @@ if ($isEditPost || $isDeletePost) {
         $success = $result === 'Annonce opdateret!';
 
         if ($success) {
-            header('Location: edit-listing.php?id=' . $listingId . '&updated=1');
+            header('Location: ./rediger-annonce?id=' . $listingId . '&updated=1');
             exit;
         }
 
@@ -180,11 +180,11 @@ require __DIR__ . '/templates/header.php';
 <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6 sm:py-12">
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-            <a class="text-sm font-semibold text-accent hover:underline" href="profile.php">&larr; Tilbage til min profil</a>
+            <a class="text-sm font-semibold text-accent hover:underline" href="profil">&larr; Tilbage til min profil</a>
             <h1 class="mt-3 text-3xl font-bold text-content">Rediger bilannonce</h1>
         </div>
         <a class="inline-flex items-center justify-center rounded-lg border border-primary/15 px-4 py-2.5 font-semibold text-content hover:border-accent hover:text-accent"
-           href="view-car.php?id=<?= (int) $listingId ?>">Se annonce</a>
+           href="bil?id=<?= (int) $listingId ?>">Se annonce</a>
     </div>
 
     <?php if ($message !== null): ?>

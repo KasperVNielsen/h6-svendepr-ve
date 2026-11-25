@@ -6,6 +6,16 @@ require_once __DIR__ . '/backend/listing.php';
 
 $cars = getListings();
 
+$fuelTypes = $pdo->query("
+    SELECT DISTINCT fuel_type
+    FROM car_listings
+    WHERE status = 'aktiv'
+      AND is_active = 1
+      AND fuel_type IS NOT NULL
+      AND TRIM(fuel_type) <> ''
+    ORDER BY fuel_type
+")->fetchAll(PDO::FETCH_COLUMN);
+
 require __DIR__ . '/frontend/templates/header.php';
 ?>
 
@@ -23,11 +33,10 @@ require __DIR__ . '/frontend/templates/header.php';
                 <label class="sr-only" for="fuel-filter">Brændstof</label>
                 <select class="rounded-lg border border-primary/15 px-4 py-3 text-content outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
                         id="fuel-filter">
-                    <option>Alle drivmidler</option>
-                    <option>El</option>
-                    <option>Benzin</option>
-                    <option>Diesel</option>
-                    <option>Hybrid</option>
+                    <option value="">Alle drivmidler</option>
+                    <?php foreach ($fuelTypes as $fuelType): ?>
+                        <option value="<?= htmlspecialchars($fuelType) ?>"><?= htmlspecialchars($fuelType) ?></option>
+                    <?php endforeach; ?>
                 </select>
 
                 <button class="rounded-lg bg-accent px-6 py-3 font-semibold text-white transition hover:bg-accent/80"
@@ -61,12 +70,12 @@ require __DIR__ . '/frontend/templates/header.php';
                 $mainImage = trim((string) ($car['main_image'] ?? ''));
                 $hasMainImage = $mainImage !== '' && !str_contains($mainImage, '..');
                 $imageUrl = $hasMainImage
-                    ? 'frontend/images/' . implode('/', array_map('rawurlencode', explode('/', ltrim(str_replace('\\', '/', $mainImage), '/'))))
+                    ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim(str_replace('\\', '/', $mainImage), '/'))))
                     : null;
                 ?>
                 <article class="group flex h-full flex-col overflow-hidden rounded-xl border border-primary/10 bg-surface shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
                     <div class="relative aspect-[4/3] overflow-hidden bg-primary/5">
-                        <a class="flex h-full items-center justify-center" href="frontend/view-car.php?id=<?= $listingId ?>">
+                        <a class="flex h-full items-center justify-center" href="bil?id=<?= $listingId ?>">
                             <?php if ($imageUrl !== null): ?>
                                 <img class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                      src="<?= htmlspecialchars($imageUrl) ?>"
@@ -97,7 +106,7 @@ require __DIR__ . '/frontend/templates/header.php';
                     <div class="flex flex-1 flex-col p-5">
                         <p class="text-2xl font-bold text-content"><?= number_format((float) $car['price'], 0, ',', '.') ?> kr.</p>
                         <h3 class="mt-3 text-lg font-bold text-content">
-                            <a class="hover:text-accent" href="frontend/view-car.php?id=<?= $listingId ?>">
+                            <a class="hover:text-accent" href="bil?id=<?= $listingId ?>">
                                 <?= htmlspecialchars($carName) ?>
                             </a>
                         </h3>

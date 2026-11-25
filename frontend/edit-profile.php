@@ -11,7 +11,7 @@ $passwordMessage = null;
 require_once __DIR__ . '/../backend/auth.php';
 
 if (!isLoggedIn()) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -26,7 +26,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
 $_SESSION['csrf_token'] = $csrfToken;
 
 if ($user === null) {
-    header('Location: login.php');
+    header('Location: ./login');
     exit;
 }
 
@@ -158,7 +158,7 @@ require __DIR__ . '/templates/header.php';
 
 <main class="mx-auto w-full max-w-4xl flex-1 px-6 py-12">
     <div class="mb-8">
-        <a class="text-sm font-semibold text-accent hover:underline" href="<?= $basePath ?>frontend/profile.php">
+        <a class="text-sm font-semibold text-accent hover:underline" href="profil">
             &larr; Tilbage til min profil
         </a>
         <h1 class="mt-3 text-3xl font-bold text-content">Rediger profil</h1>
@@ -172,7 +172,7 @@ require __DIR__ . '/templates/header.php';
         <div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-center">
             <?php if ($hasProfileImage): ?>
                 <img class="h-24 w-24 shrink-0 rounded-full object-cover"
-                     src="<?= $basePath ?>frontend/images/profile-images/<?= rawurlencode($profileImageName) ?>"
+                     src="images/profile-images/<?= rawurlencode($profileImageName) ?>"
                      alt="Dit profilbillede">
             <?php else: ?>
                 <div class="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-primary text-white">
