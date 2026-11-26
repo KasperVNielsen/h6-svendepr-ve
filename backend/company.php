@@ -270,7 +270,7 @@ function deleteCompany() {
 
         // Soft delete all company cars
         $stmt = $pdo->prepare("
-            UPDATE cars
+            UPDATE car_listings
             SET is_active = 0,
                 deleted_at = NOW()
             WHERE company_id = ?
@@ -374,7 +374,7 @@ function reactivateCompany() {
 
         // Restore cars deleted together with the company
         $stmt = $pdo->prepare("
-            UPDATE cars
+            UPDATE car_listings
             SET is_active = 1,
                 deleted_at = NULL
             WHERE company_id = ?
