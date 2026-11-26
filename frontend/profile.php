@@ -40,9 +40,24 @@ $statement = $pdo->prepare("
 $statement->execute([(int) $_SESSION['user_id']]);
 $userListings = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-$statement = $pdo->prepare('SELECT id, company_name, cvr FROM companies WHERE owner_user_id = ? LIMIT 1');
-$statement->execute([(int) $_SESSION['user_id']]);
-$ownedCompany = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+$statement = $pdo->prepare("
+    SELECT c.id, c.company_name, c.cvr, c.is_active, c.owner_user_id, ce.position
+    FROM companies c
+    LEFT JOIN company_employees ce
+      ON ce.company_id = c.id
+     AND ce.user_id = ?
+     AND ce.is_active = 1
+    WHERE c.owner_user_id = ? OR ce.user_id = ?
+    ORDER BY (c.owner_user_id = ?) DESC
+    LIMIT 1
+");
+$statement->execute([
+    (int) $_SESSION['user_id'],
+    (int) $_SESSION['user_id'],
+    (int) $_SESSION['user_id'],
+    (int) $_SESSION['user_id'],
+]);
+$userCompany = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
 
 require __DIR__ . '/templates/header.php';
 ?>
@@ -117,19 +132,27 @@ require __DIR__ . '/templates/header.php';
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h2 class="text-xl font-bold text-content">Firma</h2>
-                <?php if ($ownedCompany !== null): ?>
+                <?php if ($userCompany !== null): ?>
                     <p class="mt-2 text-content/65">
-                        <?= htmlspecialchars($ownedCompany['company_name']) ?>
-                        <span class="text-content/45">&middot; CVR <?= htmlspecialchars($ownedCompany['cvr']) ?></span>
+                        <?= htmlspecialchars($userCompany['company_name']) ?>
+                        <span class="text-content/45">&middot; CVR <?= htmlspecialchars($userCompany['cvr']) ?></span>
+                        <?php if (empty($userCompany['is_active'])): ?>
+                            <span class="ml-2 font-semibold text-danger">Deaktiveret</span>
+                        <?php elseif ((int) $userCompany['owner_user_id'] !== (int) $_SESSION['user_id']): ?>
+                            <span class="ml-2 text-content/45">&middot; <?= htmlspecialchars((string) ($userCompany['position'] ?: 'Medarbejder')) ?></span>
+                        <?php endif; ?>
                     </p>
                 <?php else: ?>
                     <p class="mt-2 text-content/65">Opret en firmaprofil, hvis du vil sælge biler som virksomhed.</p>
                 <?php endif; ?>
             </div>
 
-            <?php if ($ownedCompany === null): ?>
+            <?php if ($userCompany === null): ?>
                 <a class="inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
                    href="opret-firma">Opret firma</a>
+            <?php else: ?>
+                <a class="inline-flex items-center justify-center rounded-lg border border-primary/15 px-4 py-2.5 font-semibold transition hover:border-accent hover:text-accent"
+                   href="min-virksomhed">Gå til virksomheden</a>
             <?php endif; ?>
         </div>
     </section>

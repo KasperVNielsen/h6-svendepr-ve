@@ -46,6 +46,14 @@ $userIsLoggedIn = isLoggedIn();
                        href="profil">
                         Min profil
                     </a>
+                    <a class="font-semibold text-white/80 transition hover:text-white"
+                       href="saldo">
+                        Min saldo
+                    </a>
+                    <a class="font-semibold text-white/80 transition hover:text-white"
+                       href="min-virksomhed">
+                        Min virksomhed
+                    </a>
 
                     <form method="post" action="frontend/login.php">
                         <input type="hidden" name="action" value="logout">

@@ -390,10 +390,6 @@ require __DIR__ . '/templates/header.php';
                     <label class="mb-2 block font-medium" for="description">Beskrivelse</label>
                     <textarea class="min-h-36 w-full rounded-lg border border-primary/20 px-4 py-3" id="description" name="description"><?= $formValue('description') ?></textarea>
                 </div>
-                <div>
-                    <label class="mb-2 block font-medium" for="general_info">Generelle oplysninger</label>
-                    <textarea class="min-h-28 w-full rounded-lg border border-primary/20 px-4 py-3" id="general_info" name="general_info"><?= $formValue('general_info') ?></textarea>
-                </div>
             </div>
         </section>
 
