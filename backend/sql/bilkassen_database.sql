@@ -244,6 +244,7 @@ CREATE TABLE `car_listings` (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `sold_at` DATETIME DEFAULT NULL,
+    `deleted_at` TIMESTAMP NULL DEFAULT NULL,
 
     PRIMARY KEY (`id`),
     KEY `idx_listings_seller_user` (`seller_user_id`),

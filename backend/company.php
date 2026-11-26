@@ -236,10 +236,11 @@ function addEmployee() {
 }
 
 
+
 function deleteCompany() {
     global $pdo;
 
-    requireLogin();
+    isLoggedIn();
 
     $userId = $_SESSION['user_id'];
 
@@ -256,6 +257,7 @@ function deleteCompany() {
         WHERE id = ?
         AND owner_user_id = ?
         AND is_active = 1
+        AND deleted_at IS NULL
     ");
     $check->execute([$companyId, $userId]);
 
@@ -266,14 +268,24 @@ function deleteCompany() {
     try {
         $pdo->beginTransaction();
 
-        //Remove company employees
+        // Soft delete all company cars
+        $stmt = $pdo->prepare("
+            UPDATE cars
+            SET is_active = 0,
+                deleted_at = NOW()
+            WHERE company_id = ?
+            AND deleted_at IS NULL
+        ");
+        $stmt->execute([$companyId]);
+
+        // Remove company employees
         $stmt = $pdo->prepare("
             DELETE FROM company_employees
             WHERE company_id = ?
         ");
         $stmt->execute([$companyId]);
 
-        //Reset owner's role to normal user
+        // Reset owner's role to normal user
         $stmt = $pdo->prepare("
             UPDATE users
             SET role_id = 1
@@ -281,7 +293,7 @@ function deleteCompany() {
         ");
         $stmt->execute([$userId]);
 
-        //Soft delete company and start 30 day retention
+        // Soft delete company
         $stmt = $pdo->prepare("
             UPDATE companies
             SET is_active = 0,
@@ -305,6 +317,7 @@ function deleteCompany() {
         return "Der opstod en fejl. Prøv igen senere.";
     }
 }
+
 
 
 function reactivateCompany() {
@@ -346,7 +359,10 @@ function reactivateCompany() {
                  . "eller fristen for genaktivering er udløbet.";
         }
 
-        //Reactivate company and reset deletion timestamp
+        // Save original deletion timestamp
+        $deletedAt = $company['deleted_at'];
+
+        // Reactivate company
         $stmt = $pdo->prepare("
             UPDATE companies
             SET is_active = 1,
@@ -356,10 +372,23 @@ function reactivateCompany() {
         ");
         $stmt->execute([$companyId, $userId]);
 
-        //Restore owner as company employee
+        // Restore cars deleted together with the company
+        $stmt = $pdo->prepare("
+            UPDATE cars
+            SET is_active = 1,
+                deleted_at = NULL
+            WHERE company_id = ?
+              AND deleted_at = ?
+              AND is_active = 0
+        ");
+        $stmt->execute([$companyId, $deletedAt]);
+
+        // Restore owner as company employee
         $stmt = $pdo->prepare("
             INSERT INTO company_employees (
-                company_id, user_id, position,
+                company_id,
+                user_id,
+                position,
                 can_create_listings,
                 can_edit_listings,
                 can_manage_transactions,
@@ -368,7 +397,7 @@ function reactivateCompany() {
         ");
         $stmt->execute([$companyId, $userId]);
 
-        //Restore user's owner role
+        // Restore user's owner role
         $stmt = $pdo->prepare("
             UPDATE users
             SET role_id = 2
@@ -392,6 +421,7 @@ function reactivateCompany() {
         return "Fejl ved genaktivering. Prøv igen senere.";
     }
 }
+
 
  function editEmployee() {
     global $pdo;

@@ -384,11 +384,18 @@ function createListing() {
                 $safeName = preg_replace('/[^a-zA-Z0-9._-]/', '', $originalName);
                 $finalName = $listingId . '_' . $index . '_' . $safeName;
 
+                $mobileName = pathinfo($finalName, PATHINFO_FILENAME). '_mobile.webp';
+
                 $targetPath = $uploadDir . $finalName;
 
                 if (move_uploaded_file($tmpName, $targetPath)) {
 
                     $dbPath = 'listings/' . $listingId . '/' . $finalName;
+
+                    $mobileTarget = $uploadDir . $mobileName;
+
+                   createMobileImage($targetPath, $mobileTarget, 640);
+
                     $isMain = 0;
 
                     if (!$mainImageSet) {
@@ -696,143 +703,7 @@ function deleteListing($listingId) {
 }
 
 
-function buyListing($listingId) {
-    global $pdo;
 
-    isLoggedIn();
-
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        return "Invalid request.";
-    }
-
-    $buyerId = (int)$_SESSION['user_id'];
-    $listingId = (int)$listingId;
-
-    if ($listingId <= 0) {
-        return "Invalid listing ID.";
-    }
-
-    try {
-        $pdo->beginTransaction();
-
-        // FIND AND LOCK THE LISTING
-        $stmt = $pdo->prepare("
-            SELECT *
-            FROM car_listings
-            WHERE id = ?
-            FOR UPDATE
-        ");
-        $stmt->execute([$listingId]);
-        $listing = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$listing) {
-            throw new Exception("Listing not found.");
-        }
-
-        // CHECK IF THE CAR IS AVAILABLE
-        if ($listing['status'] !== 'aktiv' || !$listing['is_active']) {
-            throw new Exception("This car is no longer available.");
-        }
-
-        // PREVENT USERS FROM BUYING THEIR OWN CARS
-        if ((int)$listing['seller_user_id'] === $buyerId) {
-            throw new Exception("You cannot buy your own car.");
-        }
-
-        $sellerId = (int)$listing['seller_user_id'];
-
-        // LOCK BUYER AND SELLER IN THE SAME ORDER
-        $userIds = [$buyerId, $sellerId];
-        sort($userIds);
-
-        $users = [];
-
-        foreach ($userIds as $userId) {
-            $stmt = $pdo->prepare("
-                SELECT id, balance, is_active
-                FROM users
-                WHERE id = ?
-                FOR UPDATE
-            ");
-            $stmt->execute([$userId]);
-
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$user) {
-                throw new Exception("User not found.");
-            }
-
-            $users[$userId] = $user;
-        }
-
-        // CHECK BUYER ACCOUNT
-        if (!(int)$users[$buyerId]['is_active']) {
-            throw new Exception("Your account is inactive.");
-        }
-
-        // GET LISTING PRICE
-        $price = $listing['price'];
-
-        // CHECK BUYER BALANCE
-        if (bccomp((string)$users[$buyerId]['balance'], (string)$price, 2) < 0) {
-            throw new Exception("You don't have enough balance.");
-        }
-
-        // DEDUCT MONEY FROM BUYER
-        $stmt = $pdo->prepare("
-            UPDATE users
-            SET balance = balance - ?
-            WHERE id = ?
-            AND balance >= ?
-        ");
-        $stmt->execute([$price, $buyerId, $price]);
-
-        if ($stmt->rowCount() !== 1) {
-            throw new Exception("Payment could not be completed.");
-        }
-
-        // TRANSFER MONEY TO SELLER
-        $stmt = $pdo->prepare("
-            UPDATE users
-            SET balance = balance + ?
-            WHERE id = ?
-        ");
-        $stmt->execute([$price, $sellerId]);
-
-        // MARK LISTING AS SOLD
-        $stmt = $pdo->prepare("
-            UPDATE car_listings
-            SET
-                status = 'solgt',
-                is_active = 0,
-                sold_at = NOW()
-            WHERE id = ?
-        ");
-        $stmt->execute([$listingId]);
-
-        $pdo->commit();
-
-        return "You have successfully purchased: " . $listing['title'];
-
-    } catch (Exception $e) {
-
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-
-        return $e->getMessage();
-
-    } catch (PDOException $e) {
-
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-
-        error_log('buyListing: ' . $e->getMessage());
-
-        return "Something went wrong. Please try again later.";
-    }
-}
 
 //get listing info
 ?>
