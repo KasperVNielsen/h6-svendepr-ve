@@ -273,7 +273,7 @@ function deleteCompany() {
             UPDATE car_listings
             SET is_active = 0,
                 deleted_at = NOW()
-            WHERE company_id = ?
+            WHERE seller_company_id = ?
             AND deleted_at IS NULL
         ");
         $stmt->execute([$companyId]);
@@ -377,7 +377,7 @@ function reactivateCompany() {
             UPDATE car_listings
             SET is_active = 1,
                 deleted_at = NULL
-            WHERE company_id = ?
+            WHERE seller_company_id = ?
               AND deleted_at = ?
               AND is_active = 0
         ");
