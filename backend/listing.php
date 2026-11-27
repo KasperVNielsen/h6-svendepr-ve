@@ -170,6 +170,97 @@ function sanitizeListingInput() {
 }
 
 
+
+function createMobileImage($sourcePath, $targetPath, $maxWidth = 640) {
+
+    if (!file_exists($sourcePath)) {
+        return false;
+    }
+
+    // Get image information
+    $info = getimagesize($sourcePath);
+
+    if ($info === false) {
+        return false;
+    }
+
+    $width = $info[0];
+    $height = $info[1];
+    $mime = $info['mime'];
+
+    // Load original image
+    switch ($mime) {
+
+        case 'image/jpeg':
+            $source = imagecreatefromjpeg($sourcePath);
+            break;
+
+        case 'image/png':
+            $source = imagecreatefrompng($sourcePath);
+            break;
+
+        case 'image/webp':
+            $source = imagecreatefromwebp($sourcePath);
+            break;
+
+        default:
+            return false;
+    }
+
+    if (!$source) {
+        return false;
+    }
+
+    // Calculate new dimensions (never upscale)
+    if ($width > $maxWidth) {
+        $newWidth = $maxWidth;
+        $newHeight = (int) round($height * ($maxWidth / $width));
+    } else {
+        $newWidth = $width;
+        $newHeight = $height;
+    }
+
+    // Create new image
+    $mobile = imagecreatetruecolor($newWidth, $newHeight);
+
+    // Preserve transparency
+    imagealphablending($mobile, false);
+    imagesavealpha($mobile, true);
+
+    $transparent = imagecolorallocatealpha($mobile, 0, 0, 0, 127);
+    imagefill($mobile, 0, 0, $transparent);
+
+    // Resize image
+    imagecopyresampled(
+        $mobile,
+        $source,
+        0, 0, 0, 0,
+        $newWidth,
+        $newHeight,
+        $width,
+        $height
+    );
+
+    // Save as WEBP
+    $directory = dirname($targetPath);
+
+    if (!is_dir($directory)) {
+        imagedestroy($source);
+        imagedestroy($mobile);
+        return false;
+    }
+
+    $result = imagewebp($mobile, $targetPath, 80);
+
+    // Free memory
+    imagedestroy($source);
+    imagedestroy($mobile);
+
+    return $result;
+}
+
+
+
 function createListing() {
     global $pdo;
 
