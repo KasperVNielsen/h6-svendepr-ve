@@ -25,7 +25,7 @@ function buyCar() {
     try {
         $pdo->beginTransaction();
 
-        // Hent annonce
+       
         $stmt = $pdo->prepare("SELECT * FROM car_listings WHERE id = ? AND status = 'aktiv'");
         $stmt->execute([$listingId]);
         $listing = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -44,7 +44,7 @@ function buyCar() {
         $commission = calculateCommission($price);
         $sellerGets = $price - $commission;
 
-        // Tjek købers saldo
+        // check buyers saldo
         $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
         $stmt->execute([$buyerId]);
         $buyer = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -54,17 +54,17 @@ function buyCar() {
             return "Du har ikke nok penge på kontoen";
         }
 
-        // TRÆK fra køber
+        // take the balance from the buyer
         $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
         $stmt->execute([$price, $buyerId]);
 
-        // Køber transaktion
+        // buyer transaction
         $stmt = $pdo->prepare("INSERT INTO transactions 
             (user_id, type, amount, method, status, description) 
             VALUES (?, 'køb', ?, 'intern', 'gennemført', ?)");
         $stmt->execute([$buyerId, $price, "Køb af bil #" . $listingId]);
 
-        // OVERFØR til sælger (minus kommission)
+        //transfer the money to the seller (minus commission)
         if ($listing['seller_company_id']) {
             $stmt = $pdo->prepare("UPDATE companies SET balance = balance + ? WHERE id = ?");
             $stmt->execute([$sellerGets, $listing['seller_company_id']]);
@@ -73,7 +73,7 @@ function buyCar() {
             $stmt->execute([$sellerGets, $listing['seller_user_id']]);
         }
 
-        // Sælger transaktion
+        // seller transaction
         $stmt = $pdo->prepare("INSERT INTO transactions 
             (user_id, company_id, type, amount, fee, method, status, description) 
             VALUES (?, ?, 'salg', ?, ?, 'intern', 'gennemført', ?)");
@@ -85,7 +85,7 @@ function buyCar() {
             "Salg af bil #" . $listingId . " (kommission " . number_format($commission, 2) . " kr.)"
         ]);
 
-        // KOMMISSION til superadmin
+        // commission to super admin
         $superadminStmt = $pdo->prepare("SELECT id FROM users WHERE role_id = 5 LIMIT 1");
         $superadminStmt->execute();
         $superadmin = $superadminStmt->fetch(PDO::FETCH_ASSOC);
@@ -104,11 +104,11 @@ function buyCar() {
             ]);
         }
 
-        // Marker som solgt
+        // mark as sold
         $stmt = $pdo->prepare("UPDATE car_listings SET status = 'solgt', sold_at = NOW() WHERE id = ?");
         $stmt->execute([$listingId]);
 
-        // Gem salgshistorik
+        // save salehistory
         $paymentMethod = htmlspecialchars(trim($_POST['payment_method'] ?? 'intern'));
 
         $stmt = $pdo->prepare("INSERT INTO sales_history 
@@ -119,7 +119,7 @@ function buyCar() {
             $listing['seller_user_id'],
             $listing['seller_company_id'],
             $buyerId,
-            null, // buyer_company_id sæt hvis køber er firma
+            null,
             $price,
             $paymentMethod,
             "Kommission: " . number_format($commission, 2) . " kr. | Sælger modtager: " . number_format($sellerGets, 2) . " kr."
