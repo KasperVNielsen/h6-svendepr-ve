@@ -236,7 +236,6 @@ function addEmployee() {
 }
 
 
-
 function deleteCompany() {
     global $pdo;
 
@@ -250,48 +249,26 @@ function deleteCompany() {
 
     $companyId = (int)$_POST['company_id'];
 
-    // Check that the user owns the company
-    $check = $pdo->prepare("
-        SELECT id
-        FROM companies
-        WHERE id = ?
-        AND owner_user_id = ?
-        AND is_active = 1
-        AND deleted_at IS NULL
-    ");
-    $check->execute([$companyId, $userId]);
-
-    if (!$check->fetchColumn()) {
-        return "Du ejer ikke dette firma";
-    }
-
     try {
         $pdo->beginTransaction();
 
-        // Soft delete all company cars
-        $stmt = $pdo->prepare("
-            UPDATE cars
-            SET is_active = 0,
-                deleted_at = NOW()
-            WHERE company_id = ?
-            AND deleted_at IS NULL
-        ");
-        $stmt->execute([$companyId]);
-
-        // Remove company employees
-        $stmt = $pdo->prepare("
-            DELETE FROM company_employees
-            WHERE company_id = ?
-        ");
-        $stmt->execute([$companyId]);
-
-        // Reset owner's role to normal user
-        $stmt = $pdo->prepare("
-            UPDATE users
-            SET role_id = 1
+        // Check ownership and lock company
+        $check = $pdo->prepare("
+            SELECT id
+            FROM companies
             WHERE id = ?
+            AND owner_user_id = ?
+            AND is_active = 1
+            AND deleted_at IS NULL
+            FOR UPDATE
         ");
-        $stmt->execute([$userId]);
+
+        $check->execute([$companyId, $userId]);
+
+        if (!$check->fetchColumn()) {
+            $pdo->rollBack();
+            return "Du ejer ikke dette firma";
+        }
 
         // Soft delete company
         $stmt = $pdo->prepare("
@@ -300,7 +277,47 @@ function deleteCompany() {
                 deleted_at = NOW()
             WHERE id = ?
         ");
+
         $stmt->execute([$companyId]);
+
+        // Get company's deletion timestamp
+        $stmt = $pdo->prepare("
+            SELECT deleted_at
+            FROM companies
+            WHERE id = ?
+        ");
+        $stmt->execute([$companyId]);
+
+        $deletedAt = $stmt->fetchColumn();
+
+        // Soft delete all active company cars
+        $stmt = $pdo->prepare("
+            UPDATE cars
+            SET is_active = 0,
+                deleted_at = ?
+            WHERE company_id = ?
+            AND deleted_at IS NULL
+        ");
+        $stmt->execute([$deletedAt, $companyId]);
+
+        // Soft delete all active company employees
+        $stmt = $pdo->prepare("
+            UPDATE company_employees
+            SET is_active = 0,
+                deleted_at = ?
+            WHERE company_id = ?
+            AND is_active = 1
+            AND deleted_at IS NULL
+        ");
+        $stmt->execute([$deletedAt, $companyId]);
+
+        // Reset owner's role to normal user
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET role_id = 1
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId]);
 
         $pdo->commit();
 
@@ -319,7 +336,6 @@ function deleteCompany() {
 }
 
 
-
 function reactivateCompany() {
     global $pdo;
 
@@ -336,20 +352,20 @@ function reactivateCompany() {
     try {
         $pdo->beginTransaction();
 
-        // Check that the company belongs to the user,
-        // is deactivated, and is within the 30-day period
+        // Check company ownership and deletion period
         $check = $pdo->prepare("
             SELECT *
             FROM companies
             WHERE id = ?
-              AND owner_user_id = ?
-              AND is_active = 0
-              AND deleted_at IS NOT NULL
-              AND deleted_at >= NOW() - INTERVAL 30 DAY
+            AND owner_user_id = ?
+            AND is_active = 0
+            AND deleted_at IS NOT NULL
+            AND deleted_at >= NOW() - INTERVAL 30 DAY
             FOR UPDATE
         ");
 
         $check->execute([$companyId, $userId]);
+
         $company = $check->fetch(PDO::FETCH_ASSOC);
 
         if (!$company) {
@@ -368,36 +384,33 @@ function reactivateCompany() {
             SET is_active = 1,
                 deleted_at = NULL
             WHERE id = ?
-              AND owner_user_id = ?
+            AND owner_user_id = ?
         ");
         $stmt->execute([$companyId, $userId]);
 
-        // Restore cars deleted together with the company
+        // Restore cars deleted together with company
         $stmt = $pdo->prepare("
             UPDATE cars
             SET is_active = 1,
                 deleted_at = NULL
             WHERE company_id = ?
-              AND deleted_at = ?
-              AND is_active = 0
+            AND deleted_at = ?
+            AND is_active = 0
         ");
         $stmt->execute([$companyId, $deletedAt]);
 
-        // Restore owner as company employee
+        // Restore employees deleted together with company
         $stmt = $pdo->prepare("
-            INSERT INTO company_employees (
-                company_id,
-                user_id,
-                position,
-                can_create_listings,
-                can_edit_listings,
-                can_manage_transactions,
-                is_active
-            ) VALUES (?, ?, 'Ejer', 1, 1, 1, 1)
+            UPDATE company_employees
+            SET is_active = 1,
+                deleted_at = NULL
+            WHERE company_id = ?
+            AND deleted_at = ?
+            AND is_active = 0
         ");
-        $stmt->execute([$companyId, $userId]);
+        $stmt->execute([$companyId, $deletedAt]);
 
-        // Restore user's owner role
+        // Restore owner's role
         $stmt = $pdo->prepare("
             UPDATE users
             SET role_id = 2
@@ -422,123 +435,133 @@ function reactivateCompany() {
     }
 }
 
-
- function editEmployee() {
-    global $pdo;
-    
-    isLoggedIn();
-    
-    $ownerId = $_SESSION['user_id'];
-    
-    // Tjek at felterne er udfyldt
-    if (empty($_POST['employee_id']) || empty($_POST['company_id'])) {
-        return "Medarbejder ID og firma ID skal angives";
-    }
-    
-    $employeeId = (int)$_POST['employee_id'];
-    $companyId = (int)$_POST['company_id'];
-    $position = htmlspecialchars(trim($_POST['position'] ?? 'Medarbejder'));
-    $canCreate = isset($_POST['can_create']) ? 1 : 0;
-    $canEdit = isset($_POST['can_edit']) ? 1 : 0;
-    $canManage = isset($_POST['can_manage']) ? 1 : 0;
-    
-    //only the owner can change the rights
-    $checkOwner = $pdo->prepare("
-        SELECT id FROM companies 
-        WHERE id = ? AND owner_user_id = ?
-    ");
-    $checkOwner->execute([$companyId, $ownerId]);
-    
-    if ($checkOwner->rowCount() === 0) {
-        return "Du har ikke tilladelse til at redigere medarbejdere";
-    }
-    
-    //the owner cant change his own rights
-    if ($employeeId === $ownerId) {
-        return "Du kan ikke ændre dine egne ejer-rettigheder";
-    }
-    
-    //check if the employee is in the company
-    $checkEmp = $pdo->prepare("
-        SELECT id FROM company_employees 
-        WHERE company_id = ? AND user_id = ?
-    ");
-    $checkEmp->execute([$companyId, $employeeId]);
-    
-    if ($checkEmp->rowCount() === 0) {
-        return "Medarbejderen findes ikke i dette firma";
-    }
-    
-    try {
-        $stmt = $pdo->prepare("
-            UPDATE company_employees 
-            SET position = ?, 
-                can_create_listings = ?, 
-                can_edit_listings = ?, 
-                can_manage_transactions = ?
-            WHERE company_id = ? AND user_id = ?
-        ");
-        
-        $stmt->execute([
-            $position, 
-            $canCreate, 
-            $canEdit, 
-            $canManage, 
-            $companyId, 
-            $employeeId
-        ]);
-        
-        if ($stmt->rowCount() > 0) {
-            return "Medarbejder opdateret!";
-        } else {
-            return "Ingen ændringer foretaget";
-        }
-        
-    } catch (PDOException $e) {
-        return "Fejl: " . $e->getMessage();
-    }
-}
-
 function editCompany() {
     global $pdo;
-    
+
     isLoggedIn();
-    
+
     $userId = $_SESSION['user_id'];
-    
-  
+
     if (empty($_POST['company_id'])) {
         return "Firma ID mangler";
     }
-    
+
     $companyId = (int)$_POST['company_id'];
-    
-    
-    $check = $pdo->prepare("SELECT id FROM companies WHERE id = ? AND owner_user_id = ?");
+
+    // Check company ownership
+    $check = $pdo->prepare("
+        SELECT id, logo
+        FROM companies
+        WHERE id = ?
+        AND owner_user_id = ?
+    ");
+
     $check->execute([$companyId, $userId]);
-    
-    if ($check->rowCount() === 0) {
+
+    $company = $check->fetch(PDO::FETCH_ASSOC);
+
+    if (!$company) {
         return "Du ejer ikke dette firma";
     }
-    
-    // valid fields that can be changed
-    $companyName = htmlspecialchars(trim($_POST['company_name'] ?? ''));
-    $address = htmlspecialchars(trim($_POST['address'] ?? ''));
-    $zipCode = htmlspecialchars(trim($_POST['zip_code'] ?? ''));
-    $city = htmlspecialchars(trim($_POST['city'] ?? ''));
+
+    // Company information
+    $companyName = trim($_POST['company_name'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $zipCode = trim($_POST['zip_code'] ?? '');
+    $city = trim($_POST['city'] ?? '');
     $email = filter_var(trim($_POST['email'] ?? ''), FILTER_SANITIZE_EMAIL);
-    $phone = htmlspecialchars(trim($_POST['phone'] ?? ''));
-    $website = htmlspecialchars(trim($_POST['website'] ?? ''));
-    $description = htmlspecialchars(trim($_POST['description'] ?? ''));
-    
-    // Tjek at påkrævede felter er udfyldt
-    if (empty($companyName) || empty($address) || empty($city) || empty($zipCode)) {
+    $phone = trim($_POST['phone'] ?? '');
+    $website = trim($_POST['website'] ?? '');
+    $description = trim($_POST['description'] ?? '');
+
+    // Validate required fields
+    if (
+        empty($companyName) ||
+        empty($address) ||
+        empty($city) ||
+        empty($zipCode)
+    ) {
         return "Firmanavn, adresse, by og postnummer skal udfyldes";
     }
-    
+
+    // Validate email
+    if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return "Ugyldig emailadresse";
+    }
+
+    // Keep existing logo
+    $logo = $company['logo'];
+    $newLogoPath = null;
+
+    // Handle logo upload
+    if (
+        isset($_FILES['logo']) &&
+        $_FILES['logo']['error'] !== UPLOAD_ERR_NO_FILE
+    ) {
+
+        if ($_FILES['logo']['error'] !== UPLOAD_ERR_OK) {
+            return "Fejl ved upload af logo";
+        }
+
+        // Maximum 5 MB
+        if ($_FILES['logo']['size'] > 5 * 1024 * 1024) {
+            return "Logoet må maksimalt være 5 MB";
+        }
+
+        // Validate image
+        $imageInfo = getimagesize($_FILES['logo']['tmp_name']);
+
+        if ($imageInfo === false) {
+            return "Filen er ikke et gyldigt billede";
+        }
+
+        $allowedTypes = [
+            IMAGETYPE_JPEG => 'jpg',
+            IMAGETYPE_PNG  => 'png',
+            IMAGETYPE_WEBP => 'webp'
+        ];
+
+        $imageType = $imageInfo[2];
+
+        if (!isset($allowedTypes[$imageType])) {
+            return "Kun JPG, PNG og WEBP er tilladt";
+        }
+
+        // Adjust this path if your project structure differs
+        $uploadDir = dirname(__DIR__) . '/frontend/company_logo/';
+
+        // Create folder if it doesn't exist
+        if (!is_dir($uploadDir)) {
+            if (!mkdir($uploadDir, 0755, true)) {
+                return "Kunne ikke oprette company_logo mappen";
+            }
+        }
+
+        if (!is_writable($uploadDir)) {
+            return "Upload-mappen er ikke skrivbar";
+        }
+
+        // Filename: companyID_uniqueID.extension
+        $filename = $companyId . '_' . bin2hex(random_bytes(8))
+                  . '.' . $allowedTypes[$imageType];
+
+        $destination = $uploadDir . $filename;
+
+        if (!move_uploaded_file($_FILES['logo']['tmp_name'], $destination)) {
+            return "Kunne ikke gemme logoet";
+        }
+
+        // Save relative frontend path in database
+        $logo = 'company_logo/' . $filename;
+        $newLogoPath = $destination;
+    }
+
     try {
+
+        $pdo->beginTransaction();
+
         $stmt = $pdo->prepare("
-            UPDATE companies 
+            UPDATE companies
             SET company_name = ?,
                 address = ?,
                 zip_code = ?,
@@ -546,10 +569,12 @@ function editCompany() {
                 email = ?,
                 phone = ?,
                 website = ?,
-                description = ?
-            WHERE id = ? AND owner_user_id = ?
+                description = ?,
+                logo = ?
+            WHERE id = ?
+            AND owner_user_id = ?
         ");
-        
+
         $stmt->execute([
             $companyName,
             $address,
@@ -559,18 +584,109 @@ function editCompany() {
             $phone,
             $website,
             $description,
+            $logo,
             $companyId,
             $userId
         ]);
-        
-        if ($stmt->rowCount() > 0) {
-            return "Firmaoplysninger opdateret!";
-        } else {
-            return "Ingen ændringer foretaget";
+
+        $pdo->commit();
+
+        // Delete old logo after successful update
+        if ($newLogoPath !== null && !empty($company['logo'])) {
+
+            $oldLogoPath = dirname(__DIR__) . '/frontend/' . $company['logo'];
+
+            $logoDirectory = realpath($uploadDir);
+            $oldDirectory = realpath(dirname($oldLogoPath));
+
+            if (
+                is_file($oldLogoPath) &&
+                $oldDirectory !== false &&
+                $oldDirectory === $logoDirectory
+            ) {
+                unlink($oldLogoPath);
+            }
         }
-        
-    } catch (PDOException $e) {
-        return "Fejl: " . $e->getMessage();
+
+        return "Firmaoplysninger opdateret!";
+
+    } catch (Throwable $e) {
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        // Remove new logo if database update failed
+        if ($newLogoPath !== null && is_file($newLogoPath)) {
+            unlink($newLogoPath);
+        }
+
+        error_log('editCompany: ' . $e->getMessage());
+
+        return "Fejl ved opdatering af firmaoplysninger";
+    }
+}
+
+
+function deleteEmployee() {
+    global $pdo;
+
+    isLoggedIn();
+
+    $userId = $_SESSION['user_id'];
+
+    if (empty($_POST['company_id']) || empty($_POST['employee_id'])) {
+        return "Firma ID eller medarbejder ID mangler";
+    }
+
+    $companyId = (int)$_POST['company_id'];
+    $employeeId = (int)$_POST['employee_id'];
+
+    try {
+
+        // Check that the logged-in user owns the company
+        $check = $pdo->prepare("
+            SELECT id
+            FROM companies
+            WHERE id = ?
+            AND owner_user_id = ?
+            AND is_active = 1
+            AND deleted_at IS NULL
+        ");
+
+        $check->execute([$companyId, $userId]);
+
+        if (!$check->fetchColumn()) {
+            return "Du ejer ikke dette firma";
+        }
+
+        // Soft delete employee
+        $stmt = $pdo->prepare("
+            UPDATE company_employees ce
+            SET ce.is_active = 0
+            WHERE ce.id = ?
+            AND ce.company_id = ?
+            AND ce.user_id != ?
+            AND ce.is_active = 1
+        ");
+
+        $stmt->execute([
+            $employeeId,
+            $companyId,
+            $userId
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            return "Medarbejderen findes ikke eller kan ikke slettes";
+        }
+
+        return "Medarbejderen er fjernet fra firmaet!";
+
+    } catch (Throwable $e) {
+
+        error_log('deleteEmployee: ' . $e->getMessage());
+
+        return "Der opstod en fejl. Prøv igen senere.";
     }
 }
 
