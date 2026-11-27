@@ -296,6 +296,10 @@ function deleteCompany() {
             SET is_active = 0,
                 deleted_at = ?
             WHERE company_id = ?
+            UPDATE car_listings
+            SET is_active = 0,
+                deleted_at = NOW()
+            WHERE seller_company_id = ?
             AND deleted_at IS NULL
         ");
         $stmt->execute([$deletedAt, $companyId]);
@@ -390,12 +394,15 @@ function reactivateCompany() {
 
         // Restore cars deleted together with company
         $stmt = $pdo->prepare("
-            UPDATE cars
+            UPDATE car_listings
             SET is_active = 1,
                 deleted_at = NULL
             WHERE company_id = ?
             AND deleted_at = ?
             AND is_active = 0
+            WHERE seller_company_id = ?
+              AND deleted_at = ?
+              AND is_active = 0
         ");
         $stmt->execute([$companyId, $deletedAt]);
 

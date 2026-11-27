@@ -2,8 +2,38 @@
 $basePath = '../';
 
 require_once __DIR__ . '/../backend/listing.php';
+require_once __DIR__ . '/../backend/transactions.php';
 
 $listingId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+$viewerIsLoggedIn = isLoggedIn();
+$csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
+$_SESSION['csrf_token'] = $csrfToken;
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $submittedToken = $_POST['csrf_token'] ?? null;
+    $postedListingId = filter_input(INPUT_POST, 'listing_id', FILTER_VALIDATE_INT);
+    $result = '';
+    $success = false;
+
+    if (!$viewerIsLoggedIn) {
+        $result = 'Du skal være logget ind for at købe en bil.';
+    } elseif (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
+        $result = 'Formularen er udløbet. Prøv igen.';
+    } elseif (($_POST['action'] ?? '') !== 'buy_car' || $postedListingId !== $listingId) {
+        $result = 'Annoncen kunne ikke bekræftes.';
+    } else {
+        $result = buyCar();
+        $success = str_starts_with($result, 'Bil ') && str_contains($result, 'Kommission');
+    }
+
+    $_SESSION['purchase_flash'] = ['success' => $success, 'text' => $result];
+    header('Location: ./bil?id=' . (int) $listingId);
+    exit;
+}
+
+$purchaseFlash = $_SESSION['purchase_flash'] ?? null;
+unset($_SESSION['purchase_flash']);
+
 $car = $listingId && $listingId > 0 ? getCarInfo($listingId) : null;
 
 if ($car === null) {
@@ -55,6 +85,7 @@ if (!empty($car['seller_company_id'])) {
     $statement->execute([(int) $car['seller_company_id']]);
     $seller = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
     $sellerType = 'Forhandler';
+    $sellerCompanyUrl = 'virksomhed?id=' . (int) $car['seller_company_id'];
 } else {
     $statement = $pdo->prepare("
         SELECT CONCAT(first_name, ' ', last_name) AS company_name,
@@ -67,6 +98,7 @@ if (!empty($car['seller_company_id'])) {
     $statement->execute([(int) $car['seller_user_id']]);
     $seller = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
     $sellerType = 'Privat sælger';
+    $sellerCompanyUrl = null;
 }
 
 $seller ??= [
@@ -101,6 +133,12 @@ require __DIR__ . '/templates/header.php';
 ?>
 
 <main class="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+    <?php if ($purchaseFlash !== null): ?>
+        <div class="mb-7 rounded-xl border px-5 py-4 <?= $purchaseFlash['success'] ? 'border-success/20 bg-success/10 text-success' : 'border-danger/20 bg-danger/10 text-danger' ?>">
+            <p class="font-semibold"><?= htmlspecialchars($purchaseFlash['text']) ?></p>
+        </div>
+    <?php endif; ?>
+
     <nav class="mb-6 flex flex-wrap items-center gap-2 text-sm text-content/60" aria-label="Brødkrummer">
         <a class="hover:text-accent" href="./">Biler</a>
         <span aria-hidden="true">/</span>
@@ -239,11 +277,42 @@ require __DIR__ . '/templates/header.php';
         </div>
 
         <aside class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm lg:sticky lg:top-6">
+            <?php if (($car['status'] ?? '') === 'aktiv'): ?>
+                <div class="mb-6 border-b border-primary/10 pb-6">
+                    <p class="text-sm text-content/60">Pris</p>
+                    <p class="mt-1 text-2xl font-bold"><?= number_format((float) $car['price'], 0, ',', '.') ?> kr.</p>
+
+                    <?php if (!$viewerIsLoggedIn): ?>
+                        <a class="mt-4 flex w-full items-center justify-center rounded-lg bg-accent px-4 py-3 font-semibold text-white"
+                           href="login">Log ind for at købe bilen</a>
+                    <?php elseif ((int) $car['seller_user_id'] === (int) $_SESSION['user_id']): ?>
+                        <p class="mt-4 rounded-lg bg-primary/5 p-3 text-sm text-content/65">Du kan ikke købe din egen bil.</p>
+                    <?php else: ?>
+                        <form class="mt-4" method="post" onsubmit="return confirm('Vil du købe bilen for <?= number_format((float) $car['price'], 0, ',', '.') ?> kr.?');">
+                            <input type="hidden" name="action" value="buy_car">
+                            <input type="hidden" name="listing_id" value="<?= (int) $listingId ?>">
+                            <input type="hidden" name="payment_method" value="intern">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <button class="w-full rounded-lg bg-accent px-4 py-3 font-semibold text-white transition hover:bg-accent/80" type="submit">Køb bilen</button>
+                        </form>
+                        <p class="mt-2 text-xs text-content/50">Beløbet trækkes fra din private saldo.</p>
+                    <?php endif; ?>
+                </div>
+            <?php elseif (($car['status'] ?? '') === 'solgt'): ?>
+                <p class="mb-6 rounded-lg bg-primary/5 p-4 text-center font-semibold text-content/70">Bilen er solgt</p>
+            <?php endif; ?>
+
             <p class="text-sm font-semibold uppercase tracking-wider text-accent"><?= htmlspecialchars($sellerType) ?></p>
             <div class="mt-3 flex items-start gap-4">
                 <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white"><?= htmlspecialchars($sellerInitials) ?></div>
                 <div>
-                    <h2 class="text-xl font-bold text-content"><?= htmlspecialchars($seller['company_name']) ?></h2>
+                    <h2 class="text-xl font-bold text-content">
+                        <?php if ($sellerCompanyUrl !== null): ?>
+                            <a class="hover:text-accent" href="<?= htmlspecialchars($sellerCompanyUrl) ?>"><?= htmlspecialchars($seller['company_name']) ?></a>
+                        <?php else: ?>
+                            <?= htmlspecialchars($seller['company_name']) ?>
+                        <?php endif; ?>
+                    </h2>
                     <?php if ($seller['is_verified']): ?>
                         <p class="mt-1 flex items-center gap-1.5 text-sm font-medium text-success">
                             <span class="flex h-4 w-4 items-center justify-center rounded-full bg-success text-[10px] text-white">&#10003;</span>

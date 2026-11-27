@@ -39,6 +39,18 @@ RewriteCond %{REQUEST_METHOD} =GET
 RewriteCond %{THE_REQUEST} \s/+.*?/frontend/create-company\.php[\s?] [NC]
 RewriteRule ^frontend/create-company\.php$ opret-firma [R=302,L,NE]
 
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/view-company\.php[\s?] [NC]
+RewriteRule ^frontend/view-company\.php$ virksomhed [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/my-company\.php[\s?] [NC]
+RewriteRule ^frontend/my-company\.php$ min-virksomhed [R=302,L,NE]
+
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+.*?/frontend/transactions\.php[\s?] [NC]
+RewriteRule ^frontend/transactions\.php$ saldo [R=302,L,NE]
+
 # Keep page routes without a trailing slash so relative links stay at project root.
 RewriteCond %{REQUEST_METHOD} =GET
 RewriteCond %{REQUEST_FILENAME} !-d
@@ -53,6 +65,9 @@ RewriteRule ^opret-annonce/?$ frontend/create-listing.php [END,QSA]
 RewriteRule ^rediger-annonce/?$ frontend/edit-listing.php [END,QSA]
 RewriteRule ^bil/?$ frontend/view-car.php [END,QSA]
 RewriteRule ^opret-firma/?$ frontend/create-company.php [END,QSA]
+RewriteRule ^virksomhed/?$ frontend/view-company.php [END,QSA]
+RewriteRule ^min-virksomhed/?$ frontend/my-company.php [END,QSA]
+RewriteRule ^saldo/?$ frontend/transactions.php [END,QSA]
 
 # Clean public paths for uploaded/static images and the vehicle lookup endpoint.
 RewriteRule ^images/(.+)$ frontend/images/$1 [END]
