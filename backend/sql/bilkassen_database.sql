@@ -109,6 +109,7 @@ CREATE TABLE `company_employees` (
     `can_manage_transactions` TINYINT(1) NOT NULL DEFAULT 0,
     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `deleted_at` TIMESTAMP NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_emp_company_user` (`company_id`, `user_id`),
     KEY `idx_emp_user` (`user_id`),
