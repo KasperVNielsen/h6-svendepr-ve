@@ -321,11 +321,6 @@ require __DIR__ . '/templates/header.php';
                               name="description"><?= $old('description') ?></textarea>
                 </div>
                 <div>
-                    <label class="mb-2 block font-medium text-content" for="general_info">Generelle oplysninger</label>
-                    <textarea class="min-h-28 w-full rounded-lg border border-primary/20 px-4 py-3" id="general_info"
-                              name="general_info"><?= $old('general_info') ?></textarea>
-                </div>
-                <div>
                     <label class="mb-2 block font-medium text-content" for="images">Billeder</label>
                     <input class="block w-full rounded-lg border border-primary/20 bg-page text-sm text-content file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-3 file:font-semibold"
                            type="file" id="images" name="images[]" accept="image/jpeg,image/png,image/webp" multiple>

@@ -17,8 +17,18 @@ if (!isLoggedIn()) {
 }
 
 $userId = (int) $_SESSION['user_id'];
-$statement = $pdo->prepare('SELECT id, company_name FROM companies WHERE owner_user_id = ? LIMIT 1');
-$statement->execute([$userId]);
+$statement = $pdo->prepare("
+    SELECT c.id, c.company_name
+    FROM companies c
+    LEFT JOIN company_employees ce
+      ON ce.company_id = c.id
+     AND ce.user_id = ?
+     AND ce.is_active = 1
+    WHERE c.owner_user_id = ? OR ce.user_id = ?
+    ORDER BY (c.owner_user_id = ?) DESC
+    LIMIT 1
+");
+$statement->execute([$userId, $userId, $userId, $userId]);
 $existingCompany = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
 
 $csrfToken = $_SESSION['csrf_token'] ?? bin2hex(random_bytes(32));
@@ -31,7 +41,7 @@ if ($requestMethod === 'POST') {
     if (!is_string($submittedToken) || !hash_equals($csrfToken, $submittedToken)) {
         $message = 'Formularen er udløbet. Prøv igen.';
     } elseif ($existingCompany !== null) {
-        $message = 'Du ejer allerede et firma.';
+        $message = 'Du er allerede tilknyttet en virksomhed.';
     } else {
         // createCompany() starts the session itself, so close the active session first.
         session_write_close();
@@ -63,10 +73,10 @@ require __DIR__ . '/templates/header.php';
 
     <?php if ($existingCompany !== null): ?>
         <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-            <h2 class="text-xl font-bold text-content">Du ejer allerede et firma</h2>
+            <h2 class="text-xl font-bold text-content">Du er allerede tilknyttet en virksomhed</h2>
             <p class="mt-2 text-content/65"><?= htmlspecialchars($existingCompany['company_name']) ?> er tilknyttet din profil.</p>
             <a class="mt-6 inline-flex rounded-lg bg-accent px-5 py-3 font-semibold text-white transition hover:bg-accent/80"
-               href="profil">Gå til min profil</a>
+               href="min-virksomhed">Gå til virksomheden</a>
         </section>
     <?php else: ?>
         <?php if ($message !== null): ?>
