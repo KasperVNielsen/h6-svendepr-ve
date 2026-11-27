@@ -141,7 +141,7 @@ function addBalance(){
 
     $userId = $_SESSION['user_id'];
 
-     if (empty($_POST['amount'])) {
+    if (empty($_POST['amount'])) {
         return "Beløb skal angives";
     }
     
@@ -188,7 +188,7 @@ function withDraw(){
     }
 
   try {
-        // Tjek saldo først
+        //check saldo
         $stmt = $pdo->prepare("SELECT balance FROM users WHERE id = ?");
         $stmt->execute([$userId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -197,11 +197,11 @@ function withDraw(){
             return "Ikke nok penge på kontoen";
         }
 
-        // Træk fra saldo
+        // transfer from saldo
         $stmt = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
         $stmt->execute([$amount, $userId]);
 
-        // Gem transaktion
+        // save transaction
         $stmt = $pdo->prepare("
             INSERT INTO transactions 
             (user_id, type, amount, method, status, description) 
