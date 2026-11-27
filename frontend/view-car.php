@@ -3,6 +3,7 @@ $basePath = '../';
 
 require_once __DIR__ . '/../backend/listing.php';
 require_once __DIR__ . '/../backend/transactions.php';
+require_once __DIR__ . '/templates/listing-image.php';
 
 $listingId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 $viewerIsLoggedIn = isLoggedIn();
@@ -24,6 +25,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     } else {
         $result = buyCar();
         $success = str_starts_with($result, 'Bil ') && str_contains($result, 'Kommission');
+
+        if ($success) {
+            $result = 'Bilen er købt.';
+        }
     }
 
     $_SESSION['purchase_flash'] = ['success' => $success, 'text' => $result];
@@ -55,21 +60,13 @@ if ($car === null) {
 $car['brand'] = (string) ($car['brand_name'] ?? '');
 $car['model'] = (string) ($car['model_name'] ?? '');
 
-// Convert stored image paths to safe URLs relative to this page.
+// Convert stored image paths to safe desktop and mobile URLs.
 $imageUrls = [];
 foreach ($car['images'] as $image) {
-    $filename = str_replace('\\', '/', (string) ($image['filename'] ?? ''));
-
-    if ($filename === '' || str_contains($filename, '..')) {
-        continue;
+    $sources = listingImageSources((string) ($image['filename'] ?? ''));
+    if ($sources !== null) {
+        $imageUrls[] = $sources;
     }
-
-    $diskPath = __DIR__ . '/images/' . str_replace('/', DIRECTORY_SEPARATOR, ltrim($filename, '/'));
-    if (!is_file($diskPath)) {
-        continue;
-    }
-
-    $imageUrls[] = 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($filename, '/'))));
 }
 $car['images'] = $imageUrls;
 $car['equipment'] = array_values(array_filter(array_column($car['equipment'], 'name')));
@@ -77,7 +74,7 @@ $car['equipment'] = array_values(array_filter(array_column($car['equipment'], 'n
 // getCarInfo() returns seller IDs; load the matching public contact details.
 if (!empty($car['seller_company_id'])) {
     $statement = $pdo->prepare("
-        SELECT company_name, address, zip_code, city, phone, email, website, description, is_verified
+        SELECT company_name, address, zip_code, city, phone, email, website, description, logo, is_verified
         FROM companies
         WHERE id = ? AND is_active = 1
         LIMIT 1
@@ -90,7 +87,7 @@ if (!empty($car['seller_company_id'])) {
     $statement = $pdo->prepare("
         SELECT CONCAT(first_name, ' ', last_name) AS company_name,
                address, zip_code, city, phone, email,
-               NULL AS website, NULL AS description, is_verified
+               NULL AS website, NULL AS description, NULL AS logo, is_verified
         FROM users
         WHERE id = ? AND is_active = 1
         LIMIT 1
@@ -110,6 +107,7 @@ $seller ??= [
     'email' => '',
     'website' => '',
     'description' => '',
+    'logo' => '',
     'is_verified' => 0,
 ];
 
@@ -120,6 +118,12 @@ foreach (array_slice($nameParts, 0, 2) as $namePart) {
     $sellerInitials .= mb_strtoupper(mb_substr($namePart, 0, 1));
 }
 $sellerInitials = $sellerInitials !== '' ? $sellerInitials : '?';
+
+$sellerLogo = ltrim(str_replace('\\', '/', trim((string) ($seller['logo'] ?? ''))), '/');
+$sellerLogoFile = __DIR__ . '/' . str_replace('/', DIRECTORY_SEPARATOR, $sellerLogo);
+$sellerLogoUrl = $sellerLogo !== '' && !str_contains($sellerLogo, '..') && is_file($sellerLogoFile)
+    ? implode('/', array_map('rawurlencode', explode('/', $sellerLogo)))
+    : null;
 
 $sellerPhone = trim((string) ($seller['phone'] ?? ''));
 $phoneLink = preg_replace('/[^0-9+]/', '', $sellerPhone);
@@ -152,19 +156,29 @@ require __DIR__ . '/templates/header.php';
             <?php if (!empty($car['images'])): ?>
                 <section>
                     <div class="overflow-hidden rounded-xl bg-primary/5">
-                        <img class="aspect-[16/10] w-full object-cover"
-                             src="<?= htmlspecialchars($car['images'][0]) ?>"
-                             alt="<?= htmlspecialchars(trim($car['brand'] . ' ' . $car['model'] . ' ' . $car['title'])) ?>">
+                        <picture>
+                            <?php if ($car['images'][0]['mobile'] !== null): ?>
+                                <source media="(max-width: 639px)" srcset="<?= htmlspecialchars($car['images'][0]['mobile']) ?>">
+                            <?php endif; ?>
+                            <img class="aspect-[16/10] w-full object-cover"
+                                 src="<?= htmlspecialchars($car['images'][0]['desktop']) ?>"
+                                 alt="<?= htmlspecialchars(trim($car['brand'] . ' ' . $car['model'] . ' ' . $car['title'])) ?>">
+                        </picture>
                     </div>
 
                     <?php if (count($car['images']) > 1): ?>
                         <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                             <?php foreach (array_slice($car['images'], 1) as $imageIndex => $image): ?>
                                 <div class="overflow-hidden rounded-lg bg-primary/5">
-                                    <img class="aspect-[4/3] h-full w-full object-cover"
-                                         src="<?= htmlspecialchars($image) ?>"
-                                         alt="Ekstra billede <?= $imageIndex + 2 ?> af bilen"
-                                         loading="lazy">
+                                    <picture>
+                                        <?php if ($image['mobile'] !== null): ?>
+                                            <source media="(max-width: 639px)" srcset="<?= htmlspecialchars($image['mobile']) ?>">
+                                        <?php endif; ?>
+                                        <img class="aspect-[4/3] h-full w-full object-cover"
+                                             src="<?= htmlspecialchars($image['desktop']) ?>"
+                                             alt="Ekstra billede <?= $imageIndex + 2 ?> af bilen"
+                                             loading="lazy">
+                                    </picture>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -304,7 +318,13 @@ require __DIR__ . '/templates/header.php';
 
             <p class="text-sm font-semibold uppercase tracking-wider text-accent"><?= htmlspecialchars($sellerType) ?></p>
             <div class="mt-3 flex items-start gap-4">
-                <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white"><?= htmlspecialchars($sellerInitials) ?></div>
+                <?php if ($sellerLogoUrl !== null): ?>
+                    <img class="h-14 w-14 shrink-0 rounded-lg border border-primary/10 bg-white object-contain p-1"
+                         src="<?= htmlspecialchars($sellerLogoUrl) ?>"
+                         alt="Logo for <?= htmlspecialchars($seller['company_name']) ?>">
+                <?php else: ?>
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary text-lg font-bold text-white"><?= htmlspecialchars($sellerInitials) ?></div>
+                <?php endif; ?>
                 <div>
                     <h2 class="text-xl font-bold text-content">
                         <?php if ($sellerCompanyUrl !== null): ?>

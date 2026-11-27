@@ -71,4 +71,5 @@ RewriteRule ^saldo/?$ frontend/transactions.php [END,QSA]
 
 # Clean public paths for uploaded/static images and the vehicle lookup endpoint.
 RewriteRule ^images/(.+)$ frontend/images/$1 [END]
+RewriteRule ^company_logo/(.+)$ frontend/company_logo/$1 [END]
 RewriteRule ^api/bilopslag/?$ backend/autofill_listing_info.php [END,QSA]

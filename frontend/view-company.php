@@ -2,6 +2,7 @@
 $basePath = '../';
 
 require_once __DIR__ . '/../backend/company.php';
+require_once __DIR__ . '/templates/listing-image.php';
 
 $companyId = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
 $company = null;
@@ -65,6 +66,12 @@ foreach (array_slice($nameParts, 0, 2) as $namePart) {
 }
 $initials = $initials !== '' ? $initials : '?';
 
+$companyLogo = ltrim(str_replace('\\', '/', trim((string) ($company['logo'] ?? ''))), '/');
+$companyLogoFile = __DIR__ . '/' . str_replace('/', DIRECTORY_SEPARATOR, $companyLogo);
+$companyLogoUrl = $companyLogo !== '' && !str_contains($companyLogo, '..') && is_file($companyLogoFile)
+    ? implode('/', array_map('rawurlencode', explode('/', $companyLogo)))
+    : null;
+
 $phone = trim((string) ($company['phone'] ?? ''));
 $phoneLink = preg_replace('/[^0-9+]/', '', $phone);
 $formattedPhone = preg_match('/^[0-9]{8}$/', $phone) ? implode(' ', str_split($phone, 2)) : $phone;
@@ -83,9 +90,15 @@ require __DIR__ . '/templates/header.php';
     <section class="mt-6 overflow-hidden rounded-xl border border-primary/10 bg-surface shadow-sm">
         <div class="bg-primary px-6 py-8 sm:px-8">
             <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
-                <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl font-bold text-white">
-                    <?= htmlspecialchars($initials) ?>
-                </div>
+                <?php if ($companyLogoUrl !== null): ?>
+                    <img class="h-20 w-20 shrink-0 rounded-xl bg-white object-contain p-1"
+                         src="<?= htmlspecialchars($companyLogoUrl) ?>"
+                         alt="Logo for <?= htmlspecialchars($companyName) ?>">
+                <?php else: ?>
+                    <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white/10 text-2xl font-bold text-white">
+                        <?= htmlspecialchars($initials) ?>
+                    </div>
+                <?php endif; ?>
                 <div>
                     <p class="text-sm font-semibold uppercase tracking-wider text-white/60">Virksomhed</p>
                     <h1 class="mt-1 text-3xl font-bold text-white"><?= htmlspecialchars($companyName) ?></h1>
@@ -137,16 +150,20 @@ require __DIR__ . '/templates/header.php';
                 <?php foreach ($companyListings as $listing): ?>
                     <?php
                     $carName = trim($listing['brand_name'] . ' ' . $listing['model_name']);
-                    $mainImage = str_replace('\\', '/', trim((string) ($listing['main_image'] ?? '')));
-                    $imageFile = __DIR__ . '/images/' . str_replace('/', DIRECTORY_SEPARATOR, ltrim($mainImage, '/'));
-                    $imageUrl = $mainImage !== '' && !str_contains($mainImage, '..') && is_file($imageFile)
-                        ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($mainImage, '/'))))
-                        : null;
+                    $imageSources = listingImageSources((string) ($listing['main_image'] ?? ''));
                     ?>
                     <article class="overflow-hidden rounded-xl border border-primary/10 bg-surface shadow-sm">
                         <a class="flex aspect-[4/3] items-center justify-center overflow-hidden bg-primary/5" href="bil?id=<?= (int) $listing['id'] ?>">
-                            <?php if ($imageUrl !== null): ?>
-                                <img class="h-full w-full object-cover" src="<?= htmlspecialchars($imageUrl) ?>" alt="<?= htmlspecialchars($carName) ?>" loading="lazy">
+                            <?php if ($imageSources !== null): ?>
+                                <picture class="block h-full w-full">
+                                    <?php if ($imageSources['mobile'] !== null): ?>
+                                        <source media="(max-width: 639px)" srcset="<?= htmlspecialchars($imageSources['mobile']) ?>">
+                                    <?php endif; ?>
+                                    <img class="h-full w-full object-cover"
+                                         src="<?= htmlspecialchars($imageSources['desktop']) ?>"
+                                         alt="<?= htmlspecialchars($carName) ?>"
+                                         loading="lazy">
+                                </picture>
                             <?php else: ?>
                                 <span class="text-sm text-content/45">Intet billede</span>
                             <?php endif; ?>

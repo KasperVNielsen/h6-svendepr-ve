@@ -2,6 +2,8 @@
 $pageTitle = 'Min virksomhed | Bil kassen';
 $basePath = '../';
 
+require_once __DIR__ . '/templates/transaction-listing.php';
+
 // company.php handles POST by itself. Pause that router so this page can check CSRF first.
 $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $_SERVER['REQUEST_METHOD'] = 'GET';
@@ -110,6 +112,11 @@ unset($_SESSION['company_flash']);
 $employees = [];
 $companyListings = [];
 $companyTransactions = [];
+$listingStatus = (string) ($_GET['listing_status'] ?? 'aktiv');
+
+if (!in_array($listingStatus, ['aktiv', 'solgt', 'alle'], true)) {
+    $listingStatus = 'aktiv';
+}
 
 if ($company !== null && !empty($company['is_active'])) {
     $statement = $pdo->prepare("
@@ -124,22 +131,36 @@ if ($company !== null && !empty($company['is_active'])) {
     $statement->execute([(int) $company['id'], (int) $company['owner_user_id']]);
     $employees = $statement->fetchAll(PDO::FETCH_ASSOC);
 
-    $statement = $pdo->prepare("
+    $listingSql = "
         SELECT cl.id, cl.title, cl.price, cl.status, cl.main_image,
                b.name AS brand_name, m.name AS model_name
         FROM car_listings cl
         JOIN brands b ON b.id = cl.brand_id
         JOIN models m ON m.id = cl.model_id
         WHERE cl.seller_company_id = ? AND cl.is_active = 1
-        ORDER BY cl.created_at DESC
-    ");
-    $statement->execute([(int) $company['id']]);
+    ";
+    $listingParameters = [(int) $company['id']];
+
+    if ($listingStatus !== 'alle') {
+        $listingSql .= ' AND cl.status = ?';
+        $listingParameters[] = $listingStatus;
+    }
+
+    $listingSql .= ' ORDER BY cl.created_at DESC';
+    $statement = $pdo->prepare($listingSql);
+    $statement->execute($listingParameters);
     $companyListings = $statement->fetchAll(PDO::FETCH_ASSOC);
 }
 
 $canCreate = $isOwner || !empty($company['can_create_listings']);
 $canEdit = $isOwner || !empty($company['can_edit_listings']);
 $canManage = $isOwner || !empty($company['can_manage_transactions']);
+
+$companyLogo = ltrim(str_replace('\\', '/', trim((string) ($company['logo'] ?? ''))), '/');
+$companyLogoFile = __DIR__ . '/' . str_replace('/', DIRECTORY_SEPARATOR, $companyLogo);
+$companyLogoUrl = $companyLogo !== '' && !str_contains($companyLogo, '..') && is_file($companyLogoFile)
+    ? implode('/', array_map('rawurlencode', explode('/', $companyLogo)))
+    : null;
 
 if ($company !== null && !empty($company['is_active']) && $canManage) {
     $statement = $pdo->prepare("
@@ -152,6 +173,8 @@ if ($company !== null && !empty($company['is_active']) && $canManage) {
     $statement->execute([(int) $company['id']]);
     $companyTransactions = $statement->fetchAll(PDO::FETCH_ASSOC);
 }
+
+$transactionCarNames = loadTransactionCarNames($pdo, $companyTransactions);
 
 require __DIR__ . '/templates/header.php';
 ?>
@@ -219,12 +242,22 @@ require __DIR__ . '/templates/header.php';
         </section>
 
         <section class="mt-8 rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <h2 class="text-xl font-bold">Virksomhedens bilannoncer</h2>
-                <span class="text-sm text-content/60"><?= count($companyListings) ?> annoncer</span>
+                <div class="flex items-center gap-3">
+                    <form method="get">
+                        <label class="sr-only" for="listing_status">Filtrer annoncer</label>
+                        <select class="rounded-lg border border-primary/15 px-3 py-2 text-sm" id="listing_status" name="listing_status" onchange="this.form.submit()">
+                            <option value="aktiv"<?= $listingStatus === 'aktiv' ? ' selected' : '' ?>>Aktive</option>
+                            <option value="solgt"<?= $listingStatus === 'solgt' ? ' selected' : '' ?>>Solgte</option>
+                            <option value="alle"<?= $listingStatus === 'alle' ? ' selected' : '' ?>>Alle</option>
+                        </select>
+                    </form>
+                    <span class="text-sm text-content/60"><?= count($companyListings) ?> annoncer</span>
+                </div>
             </div>
             <?php if (empty($companyListings)): ?>
-                <p class="mt-6 rounded-lg border border-dashed border-primary/20 p-8 text-center text-content/60">Virksomheden har ingen aktive annoncer.</p>
+                <p class="mt-6 rounded-lg border border-dashed border-primary/20 p-8 text-center text-content/60">Der er ingen annoncer i det valgte filter.</p>
             <?php else: ?>
                 <div class="mt-6 divide-y divide-primary/10 overflow-hidden rounded-xl border border-primary/10">
                     <?php foreach ($companyListings as $listing): ?>
@@ -233,6 +266,7 @@ require __DIR__ . '/templates/header.php';
                                 <p class="font-bold"><?= htmlspecialchars(trim($listing['brand_name'] . ' ' . $listing['model_name'])) ?></p>
                                 <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars($listing['title']) ?></p>
                                 <p class="mt-1 text-sm font-semibold"><?= number_format((float) $listing['price'], 0, ',', '.') ?> kr.</p>
+                                <p class="mt-1 text-xs font-semibold uppercase text-content/50"><?= htmlspecialchars($listing['status']) ?></p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <a class="rounded-lg border border-primary/15 px-3 py-2 text-sm font-semibold" href="bil?id=<?= (int) $listing['id'] ?>">Se</a>
@@ -266,6 +300,13 @@ require __DIR__ . '/templates/header.php';
                             <?php
                             $isOutgoing = in_array($transaction['type'], ['køb', 'udbetaling'], true);
                             $displayAmount = (float) $transaction['amount'];
+                            $transactionListingId = transactionListingId((string) $transaction['description']);
+                            $transactionCarName = $transactionListingId !== null
+                                ? ($transactionCarNames[$transactionListingId] ?? null)
+                                : null;
+                            $transactionLinkText = $transactionCarName !== null
+                                ? ucfirst((string) $transaction['type']) . ' af bil – ' . $transactionCarName
+                                : preg_replace('/\s*\(kommission.*$/iu', '', (string) $transaction['description']);
                             if ($transaction['type'] === 'salg') {
                                 $displayAmount -= (float) $transaction['fee'];
                             }
@@ -273,7 +314,13 @@ require __DIR__ . '/templates/header.php';
                             <article class="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <p class="font-semibold capitalize"><?= htmlspecialchars($transaction['type']) ?></p>
-                                    <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars((string) $transaction['description']) ?></p>
+                                    <?php if ($transactionListingId !== null): ?>
+                                        <a class="mt-1 inline-block text-sm font-semibold text-accent hover:underline" href="bil?id=<?= $transactionListingId ?>">
+                                            <?= htmlspecialchars($transactionLinkText) ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars((string) $transaction['description']) ?></p>
+                                    <?php endif; ?>
                                     <p class="mt-1 text-xs text-content/45"><?= date('d.m.Y H:i', strtotime($transaction['created_at'])) ?></p>
                                 </div>
                                 <div class="sm:text-right">
@@ -319,7 +366,7 @@ require __DIR__ . '/templates/header.php';
 
                 <section class="rounded-xl border border-primary/10 bg-surface p-6 shadow-sm sm:p-8">
                     <h2 class="text-xl font-bold">Rediger virksomheden</h2>
-                    <form class="mt-6 grid gap-4 sm:grid-cols-2" method="post">
+                    <form class="mt-6 grid gap-4 sm:grid-cols-2" method="post" enctype="multipart/form-data">
                         <input type="hidden" name="action" value="edit_company">
                         <input type="hidden" name="company_id" value="<?= (int) $company['id'] ?>">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
@@ -331,6 +378,17 @@ require __DIR__ . '/templates/header.php';
                         <input class="rounded-lg border border-primary/20 px-4 py-3" name="phone" value="<?= htmlspecialchars((string) $company['phone']) ?>" placeholder="Telefon">
                         <input class="rounded-lg border border-primary/20 px-4 py-3 sm:col-span-2" name="website" value="<?= htmlspecialchars((string) $company['website']) ?>" placeholder="Hjemmeside">
                         <textarea class="min-h-28 rounded-lg border border-primary/20 px-4 py-3 sm:col-span-2" name="description" placeholder="Beskrivelse"><?= htmlspecialchars((string) $company['description']) ?></textarea>
+                        <div class="sm:col-span-2">
+                            <label class="mb-2 block font-medium" for="company_logo">Virksomhedslogo</label>
+                            <?php if ($companyLogoUrl !== null): ?>
+                                <img class="mb-3 h-20 w-20 rounded-lg border border-primary/10 object-contain p-1"
+                                     src="<?= htmlspecialchars($companyLogoUrl) ?>"
+                                     alt="Nuværende logo for <?= htmlspecialchars($company['company_name']) ?>">
+                            <?php endif; ?>
+                            <input class="block w-full rounded-lg border border-primary/20 bg-page text-sm file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-3 file:font-semibold"
+                                   type="file" id="company_logo" name="logo" accept="image/jpeg,image/png,image/webp">
+                            <p class="mt-2 text-xs text-content/55">JPG, PNG eller WebP. Maksimalt 5 MB.</p>
+                        </div>
                         <button class="rounded-lg bg-accent px-5 py-3 font-semibold text-white sm:col-span-2 sm:justify-self-start" type="submit">Gem virksomhedsoplysninger</button>
                     </form>
                 </section>
@@ -367,7 +425,7 @@ require __DIR__ . '/templates/header.php';
 
             <section class="mt-8 rounded-xl border border-danger/20 bg-danger/5 p-6 sm:p-8">
                 <h2 class="text-xl font-bold text-danger">Deaktiver virksomhed</h2>
-                <p class="mt-2 text-sm text-content/65">Backend gemmer virksomheden i 30 dage, hvor ejeren kan genaktivere den.</p>
+                <p class="mt-2 text-sm text-content/65">Virksomheden bliver gemt i 30 dage, hvor ejeren kan genaktivere den.</p>
                 <form class="mt-5" method="post" onsubmit="return confirm('Er du sikker på, at virksomheden skal deaktiveres?');">
                     <input type="hidden" name="action" value="delete_company">
                     <input type="hidden" name="company_id" value="<?= (int) $company['id'] ?>">
