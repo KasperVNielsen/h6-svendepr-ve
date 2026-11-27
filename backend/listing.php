@@ -8,7 +8,7 @@ function getListings($limit = 30){
         SELECT cl.*, b.name AS brand_name, m.name AS model_name FROM car_listings cl
         JOIN brands b ON cl.brand_id = b.id
         JOIN models m ON cl.model_id = m.id
-        WHERE cl.status = 'aktiv' AND cl.is_active = 1
+        WHERE cl.status = 'aktiv' AND cl.is_active = 1 AND cl.status != 'solgt'
         ORDER BY cl.created_at DESC
         LIMIT :limit
     ");
@@ -16,8 +16,6 @@ function getListings($limit = 30){
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
-
-
 
 function getCarInfo(int $listingId)
 {
@@ -82,8 +80,6 @@ function getCarInfo(int $listingId)
         return null;
     }
 }
-
-
 
 // identifies which company a user is allowed to create listings for, whether they own the company or work there with the appropriate permission.
 function findSeller($userId) {
@@ -168,8 +164,6 @@ function sanitizeListingInput() {
 
     return $data;
 }
-
-
 
 function createMobileImage($sourcePath, $targetPath, $maxWidth = 640) {
 
@@ -319,7 +313,7 @@ function createListing() {
 
             // Create model if it doesn't exist
             if ($modelId === 0) {
-
+                //slug is a URL-friendly version of a name or title
                 $slug = strtolower(trim($modelName));
                 $slug = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $slug);
                 $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
@@ -649,7 +643,7 @@ function editListing($listingId) {
 
                 $rmStmt->execute([(int)$imgId, $listingId]);
 
-                
+    
                 $fullPath = __DIR__ . '/../../images/' . $img['filename'];
                 if (file_exists($fullPath)) {
                     unlink($fullPath);
@@ -757,7 +751,7 @@ function deleteListing($listingId) {
     $sellerUserId    = $seller['user_id'];
     $sellerCompanyId = $seller['company_id'];
 
-    //  TJEK AT ANNONCEN FINDES OG TILHØRER BRUGEREN 
+   
     $stmt = $pdo->prepare("
     SELECT id, seller_user_id, seller_company_id
     FROM car_listings
@@ -793,9 +787,5 @@ function deleteListing($listingId) {
     }
 }
 
-
-
-
-//get listing info
 ?>
 
