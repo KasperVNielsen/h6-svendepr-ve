@@ -3,6 +3,7 @@ $pageTitle = 'Rediger bilannonce | Bil kassen';
 $basePath = '../';
 
 require_once __DIR__ . '/../backend/listing.php';
+require_once __DIR__ . '/templates/listing-image.php';
 
 // Provide the image helper until listing.php includes its own implementation.
 if (!function_exists('uploadCarImage')) {
@@ -41,6 +42,9 @@ if (!function_exists('uploadCarImage')) {
         if (!move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
             return null;
         }
+
+        $mobileFilename = pathinfo($filename, PATHINFO_FILENAME) . '_mobile.webp';
+        createMobileImage($uploadDir . $filename, $uploadDir . $mobileFilename, 640);
 
         return 'listings/' . $listingId . '/' . $filename;
     }
@@ -208,16 +212,18 @@ require __DIR__ . '/templates/header.php';
                 <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                     <?php foreach ($listingImages as $image): ?>
                         <?php
-                        $filename = str_replace('\\', '/', (string) $image['filename']);
-                        $safeImage = !str_contains($filename, '..')
-                            ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim($filename, '/'))))
-                            : null;
+                        $imageSources = listingImageSources((string) $image['filename']);
                         ?>
-                        <?php if ($safeImage !== null): ?>
+                        <?php if ($imageSources !== null): ?>
                             <div class="existing-image overflow-hidden rounded-lg border border-primary/15 bg-page">
-                                <img class="aspect-[4/3] w-full object-cover"
-                                     src="<?= htmlspecialchars($safeImage) ?>"
-                                     alt="<?= htmlspecialchars((string) ($image['original_name'] ?: 'Billede af bilen')) ?>">
+                                <picture>
+                                    <?php if ($imageSources['mobile'] !== null): ?>
+                                        <source media="(max-width: 639px)" srcset="<?= htmlspecialchars($imageSources['mobile']) ?>">
+                                    <?php endif; ?>
+                                    <img class="aspect-[4/3] w-full object-cover"
+                                         src="<?= htmlspecialchars($imageSources['desktop']) ?>"
+                                         alt="<?= htmlspecialchars((string) ($image['original_name'] ?: 'Billede af bilen')) ?>">
+                                </picture>
                                 <div class="space-y-2 p-3 text-sm">
                                     <label class="flex cursor-pointer items-center gap-2 font-semibold text-content">
                                         <input class="main-image-radio h-4 w-4"

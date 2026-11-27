@@ -3,6 +3,7 @@ $pageTitle = 'Bil kassen';
 $basePath = '';
 
 require_once __DIR__ . '/backend/listing.php';
+require_once __DIR__ . '/frontend/templates/listing-image.php';
 
 $cars = getListings();
 
@@ -67,20 +68,21 @@ require __DIR__ . '/frontend/templates/header.php';
                 <?php
                 $listingId = (int) $car['id'];
                 $carName = trim(($car['brand_name'] ?? '') . ' ' . ($car['model_name'] ?? ''));
-                $mainImage = trim((string) ($car['main_image'] ?? ''));
-                $hasMainImage = $mainImage !== '' && !str_contains($mainImage, '..');
-                $imageUrl = $hasMainImage
-                    ? 'images/' . implode('/', array_map('rawurlencode', explode('/', ltrim(str_replace('\\', '/', $mainImage), '/'))))
-                    : null;
+                $imageSources = listingImageSources((string) ($car['main_image'] ?? ''));
                 ?>
                 <article class="group flex h-full flex-col overflow-hidden rounded-xl border border-primary/10 bg-surface shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
                     <div class="relative aspect-[4/3] overflow-hidden bg-primary/5">
                         <a class="flex h-full items-center justify-center" href="bil?id=<?= $listingId ?>">
-                            <?php if ($imageUrl !== null): ?>
-                                <img class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                                     src="<?= htmlspecialchars($imageUrl) ?>"
-                                     alt="<?= htmlspecialchars($carName . ' ' . ($car['title'] ?? '')) ?>"
-                                     loading="lazy">
+                            <?php if ($imageSources !== null): ?>
+                                <picture class="block h-full w-full">
+                                    <?php if ($imageSources['mobile'] !== null): ?>
+                                        <source media="(max-width: 639px)" srcset="<?= htmlspecialchars($imageSources['mobile']) ?>">
+                                    <?php endif; ?>
+                                    <img class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                         src="<?= htmlspecialchars($imageSources['desktop']) ?>"
+                                         alt="<?= htmlspecialchars($carName . ' ' . ($car['title'] ?? '')) ?>"
+                                         loading="lazy">
+                                </picture>
                             <?php else: ?>
                                 <span class="text-sm font-medium text-content/45">Intet billede</span>
                             <?php endif; ?>

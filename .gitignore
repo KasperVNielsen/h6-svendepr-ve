@@ -3,3 +3,4 @@ db.php
 # User-uploaded images
 /frontend/images/profile-images/
 /frontend/images/listings/
+/frontend/company_logo/

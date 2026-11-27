@@ -3,6 +3,7 @@ $pageTitle = 'Min saldo | Bil kassen';
 $basePath = '../';
 
 require_once __DIR__ . '/../backend/transactions.php';
+require_once __DIR__ . '/templates/transaction-listing.php';
 
 if (!isLoggedIn()) {
     header('Location: ./login');
@@ -53,6 +54,7 @@ $statement = $pdo->prepare("
 ");
 $statement->execute([$userId]);
 $transactions = $statement->fetchAll(PDO::FETCH_ASSOC);
+$transactionCarNames = loadTransactionCarNames($pdo, $transactions);
 
 require __DIR__ . '/templates/header.php';
 ?>
@@ -119,6 +121,13 @@ require __DIR__ . '/templates/header.php';
                     <?php
                     $isOutgoing = in_array($transaction['type'], ['køb', 'udbetaling'], true);
                     $displayAmount = (float) $transaction['amount'];
+                    $transactionListingId = transactionListingId((string) $transaction['description']);
+                    $transactionCarName = $transactionListingId !== null
+                        ? ($transactionCarNames[$transactionListingId] ?? null)
+                        : null;
+                    $transactionLinkText = $transactionCarName !== null
+                        ? ucfirst((string) $transaction['type']) . ' af bil – ' . $transactionCarName
+                        : preg_replace('/\s*\(kommission.*$/iu', '', (string) $transaction['description']);
                     if ($transaction['type'] === 'salg') {
                         $displayAmount -= (float) $transaction['fee'];
                     }
@@ -126,7 +135,13 @@ require __DIR__ . '/templates/header.php';
                     <article class="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <p class="font-semibold capitalize"><?= htmlspecialchars($transaction['type']) ?></p>
-                            <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars((string) $transaction['description']) ?></p>
+                            <?php if ($transactionListingId !== null): ?>
+                                <a class="mt-1 inline-block text-sm font-semibold text-accent hover:underline" href="bil?id=<?= $transactionListingId ?>">
+                                    <?= htmlspecialchars($transactionLinkText) ?>
+                                </a>
+                            <?php else: ?>
+                                <p class="mt-1 text-sm text-content/60"><?= htmlspecialchars((string) $transaction['description']) ?></p>
+                            <?php endif; ?>
                             <p class="mt-1 text-xs text-content/45"><?= date('d.m.Y H:i', strtotime($transaction['created_at'])) ?></p>
                         </div>
                         <div class="text-left sm:text-right">
